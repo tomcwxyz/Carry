@@ -2,6 +2,7 @@ import { fallbackCase, understandCase } from '../src/server/case-understanding';
 import { getSql } from '../src/server/db';
 
 type CaptureKind = 'text' | 'voice';
+type ServerFormData = { get(name: string): FormDataEntryValue | null };
 
 async function transcribe(audio: File) {
   const key = process.env.OPENAI_API_KEY;
@@ -40,7 +41,7 @@ export default async function handler(request: Request) {
     const contentType = request.headers.get('content-type') ?? '';
     if (contentType.includes('multipart/form-data')) {
       kind = 'voice';
-      const form = await request.formData();
+      const form = await request.formData() as unknown as ServerFormData;
       const audio = form.get('audio');
       if (!(audio instanceof File)) return Response.json({ error: 'Audio file is required' }, { status: 400 });
       mediaType = audio.type || 'audio/mp4';
@@ -57,6 +58,7 @@ export default async function handler(request: Request) {
       VALUES (${ownerKey}, ${kind}, ${kind === 'voice' ? 'transcribed' : 'received'}, ${kind === 'text' ? sourceText : null}, ${kind === 'voice' ? sourceText : null}, ${mediaType})
       RETURNING id
     `;
+    if (!capture?.id) throw new Error('Carry could not persist the capture');
 
     let understood;
     try {
@@ -77,6 +79,7 @@ export default async function handler(request: Request) {
       )
       RETURNING id
     `;
+    if (!created?.id) throw new Error('Carry could not create the case');
 
     await sql`
       INSERT INTO carry_case_events (case_id, type, actor, label, payload)
