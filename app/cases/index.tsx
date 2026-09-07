@@ -31,6 +31,6 @@ const styles = StyleSheet.create({
   page: { flex: 1 },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl },
   kicker: { color: colours.muted, fontSize: 14, marginTop: spacing.sm },
-  title: { color: colours.ink, fontSize: 34, fontWeight: '750', letterSpacing: -1.2, marginTop: spacing.xs },
+  title: { color: colours.ink, fontSize: 34, fontWeight: '700', letterSpacing: -1.2, marginTop: spacing.xs },
   list: { gap: spacing.sm, marginTop: spacing.xl },
 });
