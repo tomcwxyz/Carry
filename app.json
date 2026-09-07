@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "Carry",
+    "slug": "carry",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "carry",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "uk.co.goodship.carry"
+    },
+    "android": {
+      "package": "uk.co.goodship.carry",
+      "adaptiveIcon": {
+        "backgroundColor": "#F4F0E8"
+      },
+      "edgeToEdgeEnabled": true
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow Carry to listen when you tell it what needs sorting.",
+          "enableBackgroundRecording": false,
+          "enableBackgroundPlayback": false
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
