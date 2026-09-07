@@ -17,9 +17,26 @@ Carry is a mobile-first, voice-first agent for moving real work and life adminis
 
 ## Alpha
 
-The first alpha proves one loop well:
+Alpha 0 established the native mobile shell. Alpha 1 adds the first real Carry loop:
 
-`voice/text capture → case understanding → plan → next action → needs-you/waiting → resume → done`
+`voice/text capture → transcription → structured case understanding → persistence → case readback`
+
+The current golden path is:
+
+> “My gutter is blocked.”
+
+The server transcribes voice with OpenAI, turns the capture into a bounded structured case using Vercel AI Gateway, persists the case/event history in Neon, and returns the created case to the mobile app.
+
+### Required environment
+
+```bash
+EXPO_PUBLIC_CARRY_API_URL=
+DATABASE_URL=
+OPENAI_API_KEY=
+AI_GATEWAY_API_KEY=
+```
+
+On Vercel, AI Gateway authentication is automatic; `AI_GATEWAY_API_KEY` is mainly for local server development.
 
 Initial case archetypes:
 
