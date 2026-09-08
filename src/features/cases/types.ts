@@ -26,6 +26,21 @@ export interface CaseEvent {
   label: string;
 }
 
+export interface CarrySource { title?: string; url: string }
+
+export interface CarryWork {
+  status: 'running' | 'completed' | 'needs_user' | 'waiting' | 'failed';
+  stepsTaken: number;
+  maxSteps: number;
+  stopReason?: string;
+  latestAction?: {
+    type: string;
+    status: string;
+    summary: string;
+    sources: CarrySource[];
+  };
+}
+
 export interface CarryCase {
   id: string;
   title: string;
@@ -37,5 +52,6 @@ export interface CarryCase {
   nextAction?: string;
   decisionLabel?: string;
   plan: PlanStep[];
+  work?: CarryWork;
   activity: CaseEvent[];
 }
