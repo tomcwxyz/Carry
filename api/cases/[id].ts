@@ -1,4 +1,4 @@
-import { getSql } from '../../src/server/db';
+import { getSql } from '../../src/server/db.js';
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
