@@ -1,2 +1,2 @@
-triggered: 2026-09-08T20:34:00+01:00
-reason: retry standalone Android alpha on GitHub runner
+triggered: 2026-09-08T22:18:00+01:00
+reason: persisted case flow and model configuration fixes
