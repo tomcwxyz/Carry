@@ -14,3 +14,12 @@ export async function fetchCase(id: string): Promise<CarryCase> {
   if (!response.ok) throw new Error(`Carry case load failed with ${response.status}`);
   return response.json() as Promise<CarryCase>;
 }
+
+export async function continueCase(id: string) {
+  const response = await fetch(`${getApiBase()}/api/cases/${encodeURIComponent(id)}/run`, {
+    method: 'POST',
+    headers: { 'x-carry-owner': 'alpha-local' },
+  });
+  if (!response.ok) throw new Error(`Carry run failed with ${response.status}`);
+  return response.json() as Promise<{ caseId: string; state?: string; nextAction?: string; skipped?: boolean }>;
+}
