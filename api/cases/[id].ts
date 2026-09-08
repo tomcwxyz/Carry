@@ -1,8 +1,6 @@
 import { getSql } from '../../src/server/db';
 
-export default async function handler(request: Request) {
-  if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });
-
+export async function GET(request: Request) {
   const url = new URL(request.url);
   const id = url.pathname.split('/').filter(Boolean).at(-1);
   if (!id) return Response.json({ error: 'Case id is required' }, { status: 400 });
