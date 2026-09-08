@@ -17,15 +17,15 @@ Carry is a mobile-first, voice-first agent for moving real work and life adminis
 
 ## Alpha
 
-Alpha 0 established the native mobile shell. Alpha 1 adds the first real Carry loop:
+Alpha 0 established the native mobile shell. Alpha 1 added the real voice/text → persisted case loop. Alpha 2 adds bounded execution:
 
-`voice/text capture → transcription → structured case understanding → persistence → case readback`
+`capture → understand → bounded Carry run → persisted action/evidence → continue or precise hand-back`
 
-The current golden path is:
+The Alpha 2 golden path remains:
 
 > “My gutter is blocked.”
 
-The server transcribes voice with OpenAI, turns the capture into a bounded structured case using Vercel AI Gateway, persists the case/event history in Neon, and returns the created case to the mobile app.
+Carry should now research the situation automatically, record what it found, update the case and stop only when it needs a fact or approval from the user.
 
 ### Required environment
 
@@ -36,7 +36,7 @@ OPENAI_API_KEY=
 AI_GATEWAY_API_KEY=
 ```
 
-On Vercel, AI Gateway authentication is automatic; `AI_GATEWAY_API_KEY` is mainly for local server development.
+Optional overrides include `CARRY_CASE_MODEL`, `CARRY_TRANSCRIPTION_MODEL` and `CARRY_RESEARCH_MODEL`.
 
 Initial case archetypes:
 
@@ -47,4 +47,4 @@ Initial case archetypes:
 - work — “Get this proposal finished”
 - coding — “Get Ship Check alpha ready”
 
-See [`docs/PRODUCT.md`](docs/PRODUCT.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`docs/ROADMAP.md`](docs/ROADMAP.md) for the working design.
+See [`docs/PRODUCT.md`](docs/PRODUCT.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`docs/ALPHA2.md`](docs/ALPHA2.md).
