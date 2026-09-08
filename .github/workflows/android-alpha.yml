@@ -19,6 +19,15 @@ jobs:
         with:
           node-version: 24
 
+      - name: Check Expo credentials
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::Missing EXPO_TOKEN. Add it in GitHub Settings → Secrets and variables → Actions before running this workflow."
+            exit 1
+          fi
+
       - name: Set up Expo and EAS
         uses: expo/expo-github-action@v8
         with:
