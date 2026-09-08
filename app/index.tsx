@@ -1,12 +1,13 @@
-import { router } from 'expo-router';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BottomNav } from '../src/components/BottomNav';
 import { CaseCard } from '../src/components/CaseCard';
 import { VoiceButton } from '../src/components/VoiceButton';
-import { mockCases } from '../src/features/cases/mock-cases';
-import type { CaseState } from '../src/features/cases/types';
+import { fetchCases } from '../src/features/cases/case-service';
+import type { CarryCase, CaseState } from '../src/features/cases/types';
 import { colours, spacing } from '../src/theme/tokens';
 
 const sections: Array<{ state: CaseState; label: string; description: string }> = [
@@ -16,6 +17,20 @@ const sections: Array<{ state: CaseState; label: string; description: string }> 
 ];
 
 export default function NowScreen() {
+  const [cases, setCases] = useState<CarryCase[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    setError(null);
+    fetchCases()
+      .then((loaded) => { if (active) setCases(loaded); })
+      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : 'Could not load Carry'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []));
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.page}>
@@ -30,8 +45,17 @@ export default function NowScreen() {
             <Text style={styles.headline}>What actually needs you?</Text>
           </View>
 
+          {loading ? <View style={styles.status}><ActivityIndicator /><Text style={styles.statusText}>Loading your cases…</Text></View> : null}
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {!loading && !error && cases.length === 0 ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyTitle}>Nothing is being carried yet.</Text>
+              <Text style={styles.statusText}>Tell Carry about something that needs sorting.</Text>
+            </View>
+          ) : null}
+
           {sections.map((section) => {
-            const items = mockCases.filter((item) => item.state === section.state);
+            const items = cases.filter((item) => item.state === section.state);
             if (!items.length) return null;
 
             return (
@@ -73,6 +97,11 @@ const styles = StyleSheet.create({
   intro: { paddingTop: spacing.xl, paddingBottom: spacing.lg, gap: spacing.xs },
   kicker: { color: colours.muted, fontSize: 14 },
   headline: { color: colours.ink, fontSize: 32, lineHeight: 37, fontWeight: '700', letterSpacing: -1.2 },
+  status: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.md },
+  statusText: { color: colours.muted, fontSize: 14, lineHeight: 20 },
+  error: { color: colours.rust, fontSize: 14, lineHeight: 20, marginBottom: spacing.lg },
+  empty: { borderTopWidth: 1, borderTopColor: colours.line, paddingTop: spacing.lg, gap: spacing.xs },
+  emptyTitle: { color: colours.ink, fontSize: 18, fontWeight: '700' },
   section: { marginBottom: spacing.xl },
   sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   sectionTitle: { color: colours.ink, fontSize: 20, fontWeight: '700', letterSpacing: -0.4 },
