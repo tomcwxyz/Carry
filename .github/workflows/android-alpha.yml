@@ -1,0 +1,78 @@
+name: Android Alpha APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build signed Android alpha
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Carry
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Set up Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Link or create EAS project
+        run: eas init --force --non-interactive
+
+      - name: Build standalone APK on EAS
+        run: eas build --platform android --profile alpha --non-interactive --wait --json > eas-build.json
+
+      - name: Read EAS artifact
+        id: eas
+        run: node scripts/extract-eas-build.mjs
+
+      - name: Download APK
+        run: curl --fail --location "${{ steps.eas.outputs.apk_url }}" --output Carry-alpha.apk
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Carry-Android-Alpha
+          path: Carry-alpha.apk
+          if-no-files-found: error
+
+      - name: Publish GitHub pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: carry-android-alpha-${{ github.run_number }}
+          BUILD_PAGE: ${{ steps.eas.outputs.build_page }}
+        run: |
+          NOTES="Install this APK directly on an Android test device.\n\nCommit: $GITHUB_SHA"
+          if [ -n "$BUILD_PAGE" ]; then
+            NOTES="$NOTES\n\nEAS build: $BUILD_PAGE"
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" Carry-alpha.apk --clobber
+          else
+            gh release create "$TAG" Carry-alpha.apk \
+              --target "$GITHUB_SHA" \
+              --title "Carry Android Alpha #${{ github.run_number }}" \
+              --notes "$NOTES" \
+              --prerelease
+          fi
+
+      - name: Build summary
+        run: |
+          echo "## Carry Android Alpha" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Standalone APK built against https://carry-gilt.vercel.app" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "The APK is attached to the GitHub pre-release **carry-android-alpha-${{ github.run_number }}**." >> "$GITHUB_STEP_SUMMARY"
