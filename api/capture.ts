@@ -1,5 +1,5 @@
-import { fallbackCase, understandCase } from '../src/server/case-understanding';
-import { getSql } from '../src/server/db';
+import { fallbackCase, understandCase } from '../src/server/case-understanding.js';
+import { getSql } from '../src/server/db.js';
 
 type CaptureKind = 'text' | 'voice';
 type ServerFormData = { get(name: string): FormDataEntryValue | null };
