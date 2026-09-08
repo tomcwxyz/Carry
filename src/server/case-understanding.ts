@@ -28,9 +28,13 @@ Default to state=carrying when Carry can make useful progress without the user. 
 For physical or household problems, prefer safe assessment and arranging appropriate help; do not encourage risky DIY.
 The first active plan step should be the next useful thing Carry can do. Never claim an external action has already happened.`;
 
+export function getCaseModel() {
+  return process.env.CARRY_CASE_MODEL?.trim() || 'openai/gpt-5.6-luna';
+}
+
 export async function understandCase(sourceText: string): Promise<UnderstoodCase> {
   const { output } = await generateText({
-    model: process.env.CARRY_CASE_MODEL ?? 'openai/gpt-5.6-luna',
+    model: getCaseModel(),
     system: SYSTEM,
     output: Output.object({ schema: understoodCaseSchema }),
     prompt: sourceText,
@@ -45,10 +49,10 @@ export function fallbackCase(sourceText: string): UnderstoodCase {
   return {
     title: words || 'New case',
     outcome: `Get this sorted: ${cleaned}`,
-    summary: 'Carry has captured this and is working out the next useful step.',
+    summary: 'Carry saved this, but could not analyse it yet.',
     domain: 'other',
     state: 'carrying',
-    nextAction: 'Understand the situation and identify the safest useful next action.',
+    nextAction: 'Carry needs to retry understanding this case before taking action.',
     decisionLabel: null,
     plan: [
       { label: 'Understand what needs resolving', state: 'active' },

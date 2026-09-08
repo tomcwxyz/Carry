@@ -4,7 +4,6 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { fetchCase } from '../../src/features/cases/case-service';
-import { getCaseById } from '../../src/features/cases/mock-cases';
 import type { CarryCase } from '../../src/features/cases/types';
 import { colours, radius, spacing } from '../../src/theme/tokens';
 
@@ -17,14 +16,15 @@ const stateLabels = {
 
 export default function CaseScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [item, setItem] = useState<CarryCase | undefined>(() => getCaseById(id));
-  const [loading, setLoading] = useState(!item);
+  const [item, setItem] = useState<CarryCase | undefined>();
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!id || getCaseById(id)) return;
+    if (!id) return;
     let active = true;
     setLoading(true);
+    setError(null);
     fetchCase(id)
       .then((loaded) => { if (active) setItem(loaded); })
       .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : 'Could not load this case'); })
@@ -53,19 +53,9 @@ export default function CaseScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>← Back</Text></Pressable>
         <Text style={styles.state}>{stateLabels[item.state]}</Text>
+        <Text style={styles.saved}>Saved to Carry</Text>
         <Text style={styles.title}>{item.title}</Text>
         <Text style={styles.outcome}>{item.outcome}</Text>
-
-        {item.state === 'needs_user' && (
-          <View style={styles.decisionCard}>
-            <Text style={styles.decisionKicker}>Carry needs a decision</Text>
-            <Text style={styles.decisionText}>{item.nextAction}</Text>
-            <View style={styles.actions}>
-              <Pressable style={styles.primaryButton}><Text style={styles.primaryButtonText}>{item.decisionLabel ?? 'Go ahead'}</Text></Pressable>
-              <Pressable style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>Not this</Text></Pressable>
-            </View>
-          </View>
-        )}
 
         <View style={styles.block}>
           <Text style={styles.blockTitle}>Now</Text>
@@ -99,7 +89,7 @@ export default function CaseScreen() {
           </View>
         </View>
 
-        <Pressable style={styles.tellButton} onPress={() => router.push('/capture')}><Text style={styles.tellButtonText}>●  Tell Carry something</Text></Pressable>
+        <Pressable style={styles.tellButton} onPress={() => router.push('/capture')}><Text style={styles.tellButtonText}>●  Add another case</Text></Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -111,13 +101,9 @@ const styles = StyleSheet.create({
   back: { paddingVertical: spacing.sm, alignSelf: 'flex-start' }, backText: { color: colours.secondaryInk, fontSize: 15 },
   link: { color: colours.rust, fontWeight: '700' }, muted: { color: colours.muted, textAlign: 'center' },
   state: { color: colours.moss, fontSize: 12, fontWeight: '800', letterSpacing: 1.4, marginTop: spacing.lg },
+  saved: { color: colours.muted, fontSize: 12, marginTop: spacing.xs },
   title: { color: colours.ink, fontSize: 38, lineHeight: 42, fontWeight: '700', letterSpacing: -1.5, marginTop: spacing.xs },
   outcome: { color: colours.secondaryInk, fontSize: 19, lineHeight: 28, marginTop: spacing.sm },
-  decisionCard: { backgroundColor: '#F5E3D8', borderRadius: radius.lg, padding: spacing.lg, marginTop: spacing.xl, gap: spacing.sm },
-  decisionKicker: { color: colours.rust, fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },
-  decisionText: { color: colours.ink, fontSize: 20, lineHeight: 27, fontWeight: '700' }, actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
-  primaryButton: { backgroundColor: colours.ink, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: 12 }, primaryButtonText: { color: colours.white, fontWeight: '700' },
-  secondaryButton: { borderColor: colours.ink, borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: 12 }, secondaryButtonText: { color: colours.ink, fontWeight: '700' },
   block: { marginTop: spacing.xl, borderTopWidth: 1, borderTopColor: colours.line, paddingTop: spacing.lg }, blockTitle: { color: colours.ink, fontSize: 17, fontWeight: '700', marginBottom: spacing.md }, nowText: { color: colours.secondaryInk, fontSize: 17, lineHeight: 25 },
   plan: { gap: spacing.md }, planRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }, stepMark: { color: colours.muted, width: 20, fontSize: 15 }, activeMark: { color: colours.rust }, stepText: { flex: 1, color: colours.ink, fontSize: 15, lineHeight: 22 }, doneText: { color: colours.muted },
   activity: { gap: spacing.md }, activityRow: { flexDirection: 'row', gap: spacing.md }, activityTime: { color: colours.muted, fontSize: 12, width: 42, paddingTop: 2 }, activityCopy: { flex: 1 }, activityActor: { color: colours.ink, fontSize: 13, fontWeight: '700' }, activityText: { color: colours.secondaryInk, fontSize: 14, lineHeight: 20, marginTop: 2 },
