@@ -28,9 +28,7 @@ function withStepIds(plan: Array<{ label: string; state: 'done' | 'active' | 'to
   return plan.map((step, index) => ({ ...step, id: `step-${index + 1}` }));
 }
 
-export default async function handler(request: Request) {
-  if (request.method !== 'POST') return Response.json({ error: 'Method not allowed' }, { status: 405 });
-
+export async function POST(request: Request) {
   const sql = getSql();
   const ownerKey = request.headers.get('x-carry-owner') ?? 'alpha-local';
   let kind: CaptureKind;
