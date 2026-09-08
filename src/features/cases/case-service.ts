@@ -7,6 +7,15 @@ export function getApiBase() {
   return apiBase;
 }
 
+export async function fetchCases(): Promise<CarryCase[]> {
+  const response = await fetch(`${getApiBase()}/api/cases`, {
+    headers: { 'x-carry-owner': 'alpha-local' },
+  });
+  if (!response.ok) throw new Error(`Carry cases load failed with ${response.status}`);
+  const data = await response.json() as { cases?: CarryCase[] } | CarryCase[];
+  return Array.isArray(data) ? data : data.cases ?? [];
+}
+
 export async function fetchCase(id: string): Promise<CarryCase> {
   const response = await fetch(`${getApiBase()}/api/cases/${encodeURIComponent(id)}`, {
     headers: { 'x-carry-owner': 'alpha-local' },
