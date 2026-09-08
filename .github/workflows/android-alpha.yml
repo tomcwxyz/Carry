@@ -13,8 +13,9 @@ permissions:
 
 jobs:
   build:
-    name: Build signed Android alpha
+    name: Build signed Android alpha locally
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Check out Carry
         uses: actions/checkout@v5
@@ -22,7 +23,13 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: 22
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
 
       - name: Check Expo credentials
         env:
@@ -45,15 +52,21 @@ jobs:
       - name: Link or create EAS project
         run: eas init --force --non-interactive
 
-      - name: Build standalone APK on EAS
-        run: eas build --platform android --profile alpha --non-interactive --wait --json > eas-build.json
+      - name: Build standalone APK on GitHub runner
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          eas build \
+            --platform android \
+            --profile alpha \
+            --local \
+            --non-interactive \
+            --output "$GITHUB_WORKSPACE/Carry-alpha.apk"
 
-      - name: Read EAS artifact
-        id: eas
-        run: node scripts/extract-eas-build.mjs
-
-      - name: Download APK
-        run: curl --fail --location "${{ steps.eas.outputs.apk_url }}" --output Carry-alpha.apk
+      - name: Verify APK
+        run: |
+          test -s Carry-alpha.apk
+          ls -lh Carry-alpha.apk
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
@@ -66,12 +79,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: carry-android-alpha-${{ github.run_number }}
-          BUILD_PAGE: ${{ steps.eas.outputs.build_page }}
         run: |
-          NOTES="Install this APK directly on an Android test device.\n\nCommit: $GITHUB_SHA"
-          if [ -n "$BUILD_PAGE" ]; then
-            NOTES="$NOTES\n\nEAS build: $BUILD_PAGE"
-          fi
+          NOTES="Standalone Android alpha built and signed on GitHub Actions.\n\nInstall Carry-alpha.apk directly on an Android test device.\n\nCommit: $GITHUB_SHA"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" Carry-alpha.apk --clobber
           else
@@ -86,6 +95,6 @@ jobs:
         run: |
           echo "## Carry Android Alpha" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Standalone APK built against https://carry-gilt.vercel.app" >> "$GITHUB_STEP_SUMMARY"
+          echo "Standalone APK built locally on the GitHub runner against https://carry-gilt.vercel.app" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "The APK is attached to the GitHub pre-release **carry-android-alpha-${{ github.run_number }}**." >> "$GITHUB_STEP_SUMMARY"
