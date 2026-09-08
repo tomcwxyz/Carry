@@ -1,3 +1,5 @@
+import { getCaseModel } from '../src/server/case-understanding.js';
+
 export function GET() {
   return Response.json({
     ok: true,
@@ -7,6 +9,7 @@ export function GET() {
       database: Boolean(process.env.DATABASE_URL),
       openai: Boolean(process.env.OPENAI_API_KEY),
       aiGateway: Boolean(process.env.AI_GATEWAY_API_KEY),
+      caseModel: getCaseModel(),
     },
   });
 }
