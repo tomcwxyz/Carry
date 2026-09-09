@@ -1,4 +1,4 @@
-import { runCase } from '../src/server/case-runner.js';
+import { advanceCase } from '../src/server/case-advance.js';
 import { fallbackCase, understandCase } from '../src/server/case-understanding.js';
 import { getSql } from '../src/server/db.js';
 
@@ -125,7 +125,7 @@ export async function POST(request: Request) {
 
     if (understood.state === 'carrying') {
       try {
-        const run = await runCase(created.id, ownerKey);
+        const run = await advanceCase(created.id, ownerKey);
         return Response.json({ caseId: created.id, degraded: false, run });
       } catch (error) {
         console.error('initial_case_run_failed', { caseId: created.id, error });
