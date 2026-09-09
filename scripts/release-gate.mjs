@@ -80,6 +80,18 @@ function validateUnderstoodCase(item, label) {
   assert(Array.isArray(item.activity) && item.activity.length >= 2, `${label} has no useful activity trail`);
 }
 
+function getVoiceFixtureMetadata(fixture) {
+  const fixturePath = fixture instanceof URL ? fixture.pathname : String(fixture);
+  const filename = fixturePath.split(/[\\/]/).filter(Boolean).pop() || 'carry-voice-test.wav';
+  const lower = filename.toLowerCase();
+
+  if (lower.endsWith('.wav')) return { filename, type: 'audio/wav' };
+  if (lower.endsWith('.webm')) return { filename, type: 'audio/webm' };
+  if (lower.endsWith('.m4a') || lower.endsWith('.mp4')) return { filename, type: 'audio/mp4' };
+  if (lower.endsWith('.ogg') || lower.endsWith('.oga')) return { filename, type: 'audio/ogg' };
+  return { filename, type: 'audio/mpeg' };
+}
+
 async function captureText(prompt, index) {
   const owner = `${ownerPrefix}-text-${index + 1}`;
   const response = await fetch(`${base}/api/capture`, {
@@ -102,8 +114,9 @@ async function captureText(prompt, index) {
 async function captureVoice() {
   const owner = `${ownerPrefix}-voice`;
   const bytes = await readFile(voiceFixture);
+  const { filename, type } = getVoiceFixtureMetadata(voiceFixture);
   const form = new FormData();
-  form.append('audio', new Blob([bytes], { type: 'audio/mpeg' }), 'carry-gutter-test.mp3');
+  form.append('audio', new Blob([bytes], { type }), filename);
 
   const response = await fetch(`${base}/api/capture`, {
     method: 'POST',
