@@ -25,6 +25,7 @@ export async function GET(request: Request) {
       decisionLabel: item.decision?.label ?? undefined,
       plan: item.plan ?? [],
       activity: [],
+      evidence: [],
     })),
   });
 }
