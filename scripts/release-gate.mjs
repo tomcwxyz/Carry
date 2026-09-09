@@ -21,6 +21,8 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
 async function readJson(response) {
   const text = await response.text();
   try {
@@ -30,14 +32,42 @@ async function readJson(response) {
   }
 }
 
+async function fetchIdempotentJson(url, options, label, attempts = 4) {
+  let lastError = new Error(`${label} failed`);
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: AbortSignal.timeout(30_000),
+      });
+      const body = await readJson(response);
+
+      if (response.ok) return body;
+
+      const error = new Error(`${label} failed (${response.status}): ${JSON.stringify(body)}`);
+      if (response.status < 500 && response.status !== 429) throw error;
+      lastError = error;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+
+    if (attempt < attempts) {
+      const delay = 500 * (2 ** (attempt - 1));
+      console.warn(`${label} attempt ${attempt}/${attempts} failed (${lastError.message}); retrying in ${delay}ms`);
+      await sleep(delay);
+    }
+  }
+
+  throw lastError;
+}
+
 async function getCase(caseId, owner) {
-  const response = await fetch(`${base}/api/cases/${encodeURIComponent(caseId)}`, {
-    headers: { 'x-carry-owner': owner },
-    signal: AbortSignal.timeout(30_000),
-  });
-  const item = await readJson(response);
-  assert(response.ok, `Case load failed (${response.status}): ${JSON.stringify(item)}`);
-  return item;
+  return fetchIdempotentJson(
+    `${base}/api/cases/${encodeURIComponent(caseId)}`,
+    { headers: { 'x-carry-owner': owner } },
+    'Case load',
+  );
 }
 
 function validateUnderstoodCase(item, label) {
@@ -107,6 +137,7 @@ async function main() {
     const result = await captureText(prompt, index);
     textResults.push(result);
     console.log(`PASS — ${result.title} · ${result.domain} · ${result.state}`);
+    if (index < textPrompts.length - 1) await sleep(750);
   }
 
   console.log('\n[voice] synthetic spoken fixture: “My gutter is blocked”');
