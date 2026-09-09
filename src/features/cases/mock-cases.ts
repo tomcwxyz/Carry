@@ -22,6 +22,7 @@ export const mockCases: CarryCase[] = [
       { id: 'g2', at: '20:15', actor: 'carry', label: 'Checked urgency and likely next steps' },
       { id: 'g3', at: '20:17', actor: 'carry', label: 'Compared three suitable services' },
     ],
+    evidence: [],
   },
   {
     id: 'ship-check',
@@ -41,6 +42,7 @@ export const mockCases: CarryCase[] = [
       { id: 's1', at: '18:42', actor: 'you', label: 'Asked Carry to get the next alpha ready' },
       { id: 's2', at: '18:44', actor: 'carry', label: 'Started checking the release state' },
     ],
+    evidence: [],
   },
   {
     id: 'sixty-one',
@@ -60,6 +62,7 @@ export const mockCases: CarryCase[] = [
       { id: 'e1', at: 'Mon', actor: 'you', label: 'Approved the reconnection email' },
       { id: 'e2', at: 'Mon', actor: 'carry', label: 'Marked the case as waiting for a reply' },
     ],
+    evidence: [],
   },
   {
     id: 'mot',
@@ -79,6 +82,7 @@ export const mockCases: CarryCase[] = [
     activity: [
       { id: 'm1', at: 'Fri', actor: 'carry', label: 'Booked the MOT appointment' },
     ],
+    evidence: [],
   },
 ];
 
