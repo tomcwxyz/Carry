@@ -1,4 +1,4 @@
-import { runCase } from '../../../src/server/case-runner.js';
+import { advanceCase } from '../../../src/server/case-advance.js';
 import { getSql } from '../../../src/server/db.js';
 
 export const maxDuration = 60;
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
   `;
 
   try {
-    const result = await runCase(caseId, ownerKey);
+    const result = await advanceCase(caseId, ownerKey);
     return Response.json({ caseId, result });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Carry could not continue this case';
