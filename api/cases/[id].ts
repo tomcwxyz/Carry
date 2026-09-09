@@ -12,6 +12,16 @@ function normaliseSources(value: unknown) {
   });
 }
 
+function decisionInputFrom(value: unknown) {
+  if (!value || typeof value !== 'object') return undefined;
+  const decision = value as Record<string, unknown>;
+  const kind = decision.inputKind === 'location' ? 'location' : 'text';
+  return {
+    kind,
+    askRadius: kind === 'location' && decision.askRadius === true,
+  } as const;
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const id = url.pathname.split('/').filter(Boolean).at(-1);
@@ -57,6 +67,7 @@ export async function GET(request: Request) {
     space: item.space_key === 'personal' ? 'Personal' : item.space_key,
     nextAction: item.next_action,
     decisionLabel: item.decision?.label ?? undefined,
+    decisionInput: decisionInputFrom(item.decision),
     plan: item.plan ?? [],
     evidence,
     activity: events.map((event) => ({
