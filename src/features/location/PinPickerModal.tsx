@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
   close: { color: colours.rust, fontSize: 15, fontWeight: '700', paddingTop: 5 },
   mapFrame: { flex: 1, marginHorizontal: spacing.lg, borderWidth: 1, borderColor: colours.line, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: colours.surface },
   webview: { flex: 1, backgroundColor: colours.surface },
-  loading: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: colours.surface },
+  loading: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: colours.surface },
   mapFallback: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
   mapFallbackTitle: { color: colours.ink, fontSize: 18, fontWeight: '700', textAlign: 'center' },
   mapFallbackText: { color: colours.secondaryInk, fontSize: 15, lineHeight: 22, textAlign: 'center', marginTop: spacing.sm },
