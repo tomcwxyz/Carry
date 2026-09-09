@@ -1,4 +1,4 @@
-import { runCase } from '../../../src/server/case-runner.js';
+import { advanceCase } from '../../../src/server/case-advance.js';
 
 export const maxDuration = 60;
 
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
 
   const ownerKey = request.headers.get('x-carry-owner') ?? 'alpha-local';
   try {
-    const result = await runCase(caseId, ownerKey);
+    const result = await advanceCase(caseId, ownerKey);
     return Response.json({ caseId, result });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Carry could not run this case';
