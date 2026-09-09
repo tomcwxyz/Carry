@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 const base = (process.env.CARRY_API_URL || 'https://carry-gilt.vercel.app').replace(/\/$/, '');
 const ownerPrefix = process.env.CARRY_GATE_OWNER || `alpha-release-gate-${Date.now()}`;
-const voiceFixture = process.env.CARRY_VOICE_FIXTURE || new URL('./fixtures/carry-gutter-test.webm', import.meta.url);
+const voiceFixture = process.env.CARRY_VOICE_FIXTURE || new URL('./fixtures/carry-gutter-test.mp3', import.meta.url);
 
 const textPrompts = [
   'My gutter is blocked',
@@ -103,7 +103,7 @@ async function captureVoice() {
   const owner = `${ownerPrefix}-voice`;
   const bytes = await readFile(voiceFixture);
   const form = new FormData();
-  form.append('audio', new Blob([bytes], { type: 'audio/webm' }), 'carry-gutter-test.webm');
+  form.append('audio', new Blob([bytes], { type: 'audio/mpeg' }), 'carry-gutter-test.mp3');
 
   const response = await fetch(`${base}/api/capture`, {
     method: 'POST',
