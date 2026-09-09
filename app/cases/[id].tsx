@@ -86,6 +86,7 @@ export default function CaseScreen() {
   }
 
   const canRetry = item.state === 'carrying' && item.nextAction?.toLowerCase().includes('retry');
+  const evidenceItems = item.evidence ?? [];
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -131,11 +132,11 @@ export default function CaseScreen() {
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
         </View>
 
-        {item.evidence.length > 0 ? (
+        {evidenceItems.length > 0 ? (
           <View style={styles.block}>
             <Text style={styles.blockTitle}>What Carry found</Text>
             <View style={styles.evidenceList}>
-              {item.evidence.map((evidence) => (
+              {evidenceItems.map((evidence) => (
                 <View key={evidence.id} style={styles.evidenceCard}>
                   <Text style={styles.evidenceTitle}>{evidence.title}</Text>
                   <Text style={styles.evidenceBody}>{evidence.body}</Text>
@@ -199,9 +200,9 @@ const styles = StyleSheet.create({
   outcome: { color: colours.secondaryInk, fontSize: 19, lineHeight: 28, marginTop: spacing.sm },
   block: { marginTop: spacing.xl, borderTopWidth: 1, borderTopColor: colours.line, paddingTop: spacing.lg }, blockTitle: { color: colours.ink, fontSize: 17, fontWeight: '700', marginBottom: spacing.md }, nowText: { color: colours.secondaryInk, fontSize: 17, lineHeight: 25 },
   responseCard: { marginTop: spacing.lg, gap: spacing.sm }, responsePrompt: { color: colours.ink, fontSize: 15, lineHeight: 22, fontWeight: '600' },
-  responseInput: { minHeight: 92, borderWidth: 1, borderColor: colours.line, borderRadius: radius.card, padding: spacing.md, color: colours.ink, backgroundColor: colours.white, fontSize: 16, lineHeight: 22, textAlignVertical: 'top' },
+  responseInput: { minHeight: 92, borderWidth: 1, borderColor: colours.line, borderRadius: radius.lg, padding: spacing.md, color: colours.ink, backgroundColor: colours.white, fontSize: 16, lineHeight: 22, textAlignVertical: 'top' },
   actionButton: { marginTop: spacing.xs, backgroundColor: colours.ink, borderRadius: radius.pill, minHeight: 52, paddingHorizontal: spacing.lg, alignItems: 'center', justifyContent: 'center' }, disabledButton: { opacity: 0.45 }, actionButtonText: { color: colours.white, fontWeight: '700', fontSize: 15 }, errorText: { color: colours.rust, marginTop: spacing.sm, fontSize: 14, lineHeight: 20 },
-  evidenceList: { gap: spacing.md }, evidenceCard: { borderWidth: 1, borderColor: colours.line, borderRadius: radius.card, padding: spacing.md, backgroundColor: colours.white }, evidenceTitle: { color: colours.ink, fontSize: 16, fontWeight: '700' }, evidenceBody: { color: colours.secondaryInk, fontSize: 15, lineHeight: 22, marginTop: spacing.sm },
+  evidenceList: { gap: spacing.md }, evidenceCard: { borderWidth: 1, borderColor: colours.line, borderRadius: radius.lg, padding: spacing.md, backgroundColor: colours.white }, evidenceTitle: { color: colours.ink, fontSize: 16, fontWeight: '700' }, evidenceBody: { color: colours.secondaryInk, fontSize: 15, lineHeight: 22, marginTop: spacing.sm },
   sources: { marginTop: spacing.md, gap: spacing.xs }, sourceHeading: { color: colours.muted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8 }, sourceLink: { color: colours.rust, fontSize: 13, lineHeight: 18 },
   plan: { gap: spacing.md }, planRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }, stepMark: { color: colours.muted, width: 20, fontSize: 15 }, activeMark: { color: colours.rust }, stepText: { flex: 1, color: colours.ink, fontSize: 15, lineHeight: 22 }, doneText: { color: colours.muted },
   activity: { gap: spacing.md }, activityRow: { flexDirection: 'row', gap: spacing.md }, activityTime: { color: colours.muted, fontSize: 12, width: 42, paddingTop: 2 }, activityCopy: { flex: 1 }, activityActor: { color: colours.ink, fontSize: 13, fontWeight: '700' }, activityText: { color: colours.secondaryInk, fontSize: 14, lineHeight: 20, marginTop: 2 },
