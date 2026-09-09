@@ -7,13 +7,19 @@ export const maxDuration = 60;
 type CaptureKind = 'text' | 'voice';
 type ServerFormData = { get(name: string): FormDataEntryValue | null };
 
+function transcriptionModel() {
+  const configured = process.env.CARRY_TRANSCRIPTION_MODEL ?? 'gpt-4o-mini-transcribe';
+  return configured.replace(/^openai\//, '');
+}
+
 async function transcribe(audio: File) {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new Error('OPENAI_API_KEY is not configured');
 
+  const model = transcriptionModel();
   const body = new FormData();
   body.append('file', audio, audio.name || 'capture.m4a');
-  body.append('model', process.env.CARRY_TRANSCRIPTION_MODEL ?? 'gpt-4o-mini-transcribe');
+  body.append('model', model);
 
   const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST',
@@ -21,7 +27,19 @@ async function transcribe(audio: File) {
     body,
   });
 
-  if (!response.ok) throw new Error(`Transcription failed with ${response.status}`);
+  if (!response.ok) {
+    const errorBody = await response.text();
+    console.error('transcription_failed', {
+      status: response.status,
+      model,
+      filename: audio.name || null,
+      contentType: audio.type || null,
+      bytes: audio.size,
+      response: errorBody.slice(0, 1200),
+    });
+    throw new Error(`Transcription failed with ${response.status}`);
+  }
+
   const data = await response.json() as { text?: string };
   if (!data.text?.trim()) throw new Error('Transcription returned no text');
   return data.text.trim();
