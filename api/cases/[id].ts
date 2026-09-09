@@ -12,6 +12,26 @@ function normaliseSources(value: unknown) {
   });
 }
 
+function decisionInputFrom(value: unknown, nextAction: unknown, domain: unknown) {
+  if (!value || typeof value !== 'object') return undefined;
+  const decision = value as Record<string, unknown>;
+
+  if (decision.inputKind === 'location') {
+    return { kind: 'location', askRadius: decision.askRadius === true } as const;
+  }
+  if (decision.inputKind === 'text') return { kind: 'text', askRadius: false } as const;
+
+  // Cases created before location-aware handbacks only stored a label. Keep those usable
+  // without turning every free-text decision into a location request.
+  const copy = `${String(decision.label ?? '')} ${String(nextAction ?? '')}`.toLowerCase();
+  const locationSpecific = /\b(postcode|postal code|location|address|town|city|area|where (?:you|the property|it|this))\b/.test(copy);
+  if (!locationSpecific) return { kind: 'text', askRadius: false } as const;
+
+  const nearbySearch = /\b(nearby|local|provider|service|contractor|shop|store|venue|restaurant|garage|find|search|options?)\b/.test(copy)
+    || domain === 'household';
+  return { kind: 'location', askRadius: nearbySearch } as const;
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const id = url.pathname.split('/').filter(Boolean).at(-1);
@@ -57,6 +77,7 @@ export async function GET(request: Request) {
     space: item.space_key === 'personal' ? 'Personal' : item.space_key,
     nextAction: item.next_action,
     decisionLabel: item.decision?.label ?? undefined,
+    decisionInput: decisionInputFrom(item.decision, item.next_action, item.domain),
     plan: item.plan ?? [],
     evidence,
     activity: events.map((event) => ({

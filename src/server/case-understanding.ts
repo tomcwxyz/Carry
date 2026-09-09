@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { createOpenAIResponse, getOpenAIOutputText } from './openai-response.js';
+import { decisionInputJsonSchema, decisionInputSchema, normaliseDecisionInput } from './decision-input.js';
 
 const domainSchema = z.enum(['personal', 'household', 'family', 'admin', 'purchase', 'travel', 'work', 'code', 'other']);
 const stateSchema = z.enum(['carrying', 'needs_user']);
@@ -14,6 +15,7 @@ const rawUnderstoodCaseSchema = z.object({
   state: stateSchema,
   nextAction: z.string(),
   decisionLabel: z.string().nullable(),
+  decisionInput: decisionInputSchema.nullable(),
   plan: z.array(z.object({
     label: z.string(),
     state: stepStateSchema,
@@ -28,6 +30,7 @@ export const understoodCaseSchema = z.object({
   state: stateSchema,
   nextAction: z.string().min(4).max(220),
   decisionLabel: z.string().max(80).nullable(),
+  decisionInput: decisionInputSchema.nullable(),
   plan: z.array(z.object({
     label: z.string().min(3).max(140),
     state: stepStateSchema,
@@ -47,6 +50,7 @@ const understoodCaseJsonSchema = {
     state: { type: 'string', enum: ['carrying', 'needs_user'] },
     nextAction: { type: 'string' },
     decisionLabel: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+    decisionInput: decisionInputJsonSchema,
     plan: {
       type: 'array',
       items: {
@@ -60,7 +64,7 @@ const understoodCaseJsonSchema = {
       },
     },
   },
-  required: ['title', 'outcome', 'summary', 'domain', 'state', 'nextAction', 'decisionLabel', 'plan'],
+  required: ['title', 'outcome', 'summary', 'domain', 'state', 'nextAction', 'decisionLabel', 'decisionInput', 'plan'],
 } as const;
 
 const SYSTEM = `You are Carry, an agent that moves real-life and work cases towards completion.
@@ -69,6 +73,8 @@ Do not turn it into a conventional to-do item. Define what finished looks like a
 Default to state=carrying when Carry can make useful progress without the user. Use needs_user only when a genuine decision or missing fact blocks progress now.
 For physical or household problems, prefer safe assessment and arranging appropriate help; do not encourage risky DIY.
 The first active plan step should be the next useful thing Carry can do. Never claim an external action has already happened.
+When state=needs_user, set decisionInput to describe how the mobile app should collect the blocking input. Use kind=location only when the user's current/place location is genuinely required; otherwise use kind=text. Set askRadius=true only when Carry will search for nearby providers, places or options and a search distance would materially change the result. Never request location merely because it could be convenient.
+When state=carrying, decisionLabel and decisionInput must both be null.
 Be terse: title under 60 characters, summary one short sentence, decision label a short prompt, and normally 2-4 plan steps.`;
 
 function clip(value: string, max: number) {
@@ -79,6 +85,7 @@ function clip(value: string, max: number) {
 
 function normaliseUnderstoodCase(value: unknown): UnderstoodCase {
   const raw = rawUnderstoodCaseSchema.parse(value);
+  const hasHandback = raw.state === 'needs_user' && Boolean(raw.decisionLabel?.trim());
   return understoodCaseSchema.parse({
     title: clip(raw.title, 80),
     outcome: clip(raw.outcome, 280),
@@ -86,7 +93,8 @@ function normaliseUnderstoodCase(value: unknown): UnderstoodCase {
     domain: raw.domain,
     state: raw.state,
     nextAction: clip(raw.nextAction, 220),
-    decisionLabel: raw.decisionLabel ? clip(raw.decisionLabel, 80) : null,
+    decisionLabel: hasHandback && raw.decisionLabel ? clip(raw.decisionLabel, 80) : null,
+    decisionInput: normaliseDecisionInput(raw.decisionInput, hasHandback),
     plan: raw.plan.slice(0, 6).map((step) => ({
       label: clip(step.label, 140),
       state: step.state,
@@ -136,6 +144,7 @@ export function fallbackCase(sourceText: string): UnderstoodCase {
     state: 'carrying',
     nextAction: 'Carry needs to retry understanding this case before taking action.',
     decisionLabel: null,
+    decisionInput: null,
     plan: [
       { label: 'Understand what needs resolving', state: 'active' },
       { label: 'Take the next useful action', state: 'todo' },

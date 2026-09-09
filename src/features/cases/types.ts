@@ -38,6 +38,24 @@ export interface CaseEvidence {
   sources: EvidenceSource[];
 }
 
+export interface CaseDecisionInput {
+  kind: 'text' | 'location';
+  askRadius: boolean;
+}
+
+export interface CarryLocationResponse {
+  source: 'device' | 'pin';
+  latitude: number;
+  longitude: number;
+  accuracyMetres?: number;
+  label?: string;
+  radiusMiles?: number;
+}
+
+export type CarryCaseResponse =
+  | { text: string }
+  | { text?: string; location: CarryLocationResponse };
+
 export interface CarryCase {
   id: string;
   title: string;
@@ -48,6 +66,7 @@ export interface CarryCase {
   space: string;
   nextAction?: string;
   decisionLabel?: string;
+  decisionInput?: CaseDecisionInput;
   plan: PlanStep[];
   activity: CaseEvent[];
   evidence: CaseEvidence[];

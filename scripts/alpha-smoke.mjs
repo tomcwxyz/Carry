@@ -1,10 +1,12 @@
 const base = (process.env.CARRY_API_URL || 'https://carry-gilt.vercel.app').replace(/\/$/, '');
 const owner = process.env.CARRY_SMOKE_OWNER || `alpha-smoke-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const prompt = process.argv.slice(2).join(' ').trim() || 'My gutter is blocked';
-const responseText = process.env.CARRY_SMOKE_RESPONSE || 'NE3 5HN, two-storey house, normal access from the front and rear.';
+const responseText = process.env.CARRY_SMOKE_RESPONSE || 'Two-storey house, normal access from the front and rear. Water is not entering the house.';
 const expectedDomain = process.env.CARRY_EXPECT_DOMAIN?.trim();
 const requireEvidence = process.env.CARRY_REQUIRE_EVIDENCE !== 'false';
 const forbiddenSourcePattern = process.env.CARRY_FORBID_SOURCE_PATTERN?.trim();
+const expectLocationHandback = process.env.CARRY_EXPECT_LOCATION_HAND_BACK === 'true';
+const smokeLocation = process.env.CARRY_SMOKE_LOCATION ? JSON.parse(process.env.CARRY_SMOKE_LOCATION) : undefined;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -48,6 +50,31 @@ function validateEvidence(item) {
   }
 }
 
+async function respond(caseId, item) {
+  const inputKind = item.decisionInput?.kind ?? 'text';
+  const usesLocation = inputKind === 'location';
+  if (usesLocation) assert(smokeLocation, 'Case requested location but CARRY_SMOKE_LOCATION is not configured');
+  assert(responseText.trim() || usesLocation, 'Case needs a response but CARRY_SMOKE_RESPONSE is empty');
+
+  const body = usesLocation
+    ? { location: smokeLocation, text: responseText.trim() || undefined }
+    : { text: responseText };
+
+  console.log(`Hand-back [${inputKind}]: ${item.nextAction}`);
+  console.log(`Responding: ${JSON.stringify(body)}`);
+  const response = await fetch(`${base}/api/cases/${encodeURIComponent(caseId)}/respond`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-carry-owner': owner,
+    },
+    body: JSON.stringify(body),
+  });
+  const responded = await json(response);
+  assert(response.ok, `Case response failed with ${response.status}: ${JSON.stringify(responded)}`);
+  return usesLocation;
+}
+
 async function main() {
   console.log(`Carry alpha smoke: ${prompt}`);
   console.log(`API: ${base}`);
@@ -71,21 +98,15 @@ async function main() {
   if (expectedDomain) assert(item.domain === expectedDomain, `Expected domain ${expectedDomain}, got ${item.domain}`);
   assert(typeof item.nextAction === 'string' && item.nextAction.length > 3, 'Case has no useful next action');
 
-  if (item.state === 'needs_user') {
-    assert(responseText.trim(), 'Case needs a response but CARRY_SMOKE_RESPONSE is empty');
-    console.log(`Hand-back: ${item.nextAction}`);
-    console.log(`Responding: ${responseText}`);
-    const respondResponse = await fetch(`${base}/api/cases/${encodeURIComponent(capture.caseId)}/respond`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-carry-owner': owner,
-      },
-      body: JSON.stringify({ text: responseText }),
-    });
-    const responded = await json(respondResponse);
-    assert(respondResponse.ok, `Case response failed with ${respondResponse.status}: ${JSON.stringify(responded)}`);
+  let sawLocationHandback = false;
+  for (let handback = 0; handback < 3 && item.state === 'needs_user'; handback += 1) {
+    const usedLocation = await respond(capture.caseId, item);
+    sawLocationHandback ||= usedLocation;
     item = await getCase(capture.caseId);
+  }
+
+  if (expectLocationHandback) {
+    assert(sawLocationHandback, 'Expected a location-specific hand-back, but Carry only requested text');
   }
 
   assert(Array.isArray(item.activity) && item.activity.length >= 4, 'Case did not record a useful action trail');
@@ -101,6 +122,7 @@ async function main() {
     state: item.state,
     summary: item.summary,
     nextAction: item.nextAction,
+    sawLocationHandback,
     evidence: item.evidence,
     plan: item.plan,
   }, null, 2));

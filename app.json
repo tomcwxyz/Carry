@@ -27,6 +27,13 @@
           "enableBackgroundRecording": false,
           "enableBackgroundPlayback": false
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow Carry to use your location when a case needs somewhere nearby.",
+          "isAndroidBackgroundLocationEnabled": false
+        }
       ]
     ]
   }
