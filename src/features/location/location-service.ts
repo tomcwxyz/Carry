@@ -27,7 +27,7 @@ export async function reverseGeocodeLabel(latitude: number, longitude: number) {
 
 export async function getCurrentCarryLocation(): Promise<CarryLocationResponse> {
   const permission = await Location.requestForegroundPermissionsAsync();
-  if (permission.status !== Location.PermissionStatus.GRANTED) {
+  if (permission.status !== 'granted') {
     throw new Error('Location permission was not granted. Drop a pin or type a postcode or place instead.');
   }
 
