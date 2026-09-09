@@ -74,7 +74,11 @@ export async function POST(request: Request) {
     }
 
     const plan = withStepIds(understood.plan);
-    const decision = understood.decisionLabel ? { label: understood.decisionLabel } : null;
+    const decision = understood.decisionLabel ? {
+      label: understood.decisionLabel,
+      inputKind: understood.decisionInput?.kind ?? 'text',
+      askRadius: understood.decisionInput?.askRadius ?? false,
+    } : null;
     const [created] = await sql`
       INSERT INTO carry_cases (owner_key, title, outcome, summary, state, domain, source_text, next_action, decision, plan)
       VALUES (
@@ -113,7 +117,10 @@ export async function POST(request: Request) {
     if (understood.state === 'needs_user' && understood.decisionLabel) {
       await sql`
         INSERT INTO carry_case_events (case_id, type, actor, label, payload)
-        VALUES (${created.id}, 'decision_requested', 'carry', ${understood.decisionLabel}, '{}'::jsonb)
+        VALUES (
+          ${created.id}, 'decision_requested', 'carry', ${understood.decisionLabel},
+          ${JSON.stringify({ inputKind: decision?.inputKind ?? 'text', askRadius: decision?.askRadius ?? false })}::jsonb
+        )
       `;
     }
 
