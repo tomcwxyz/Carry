@@ -1,2 +1,2 @@
-triggered: 2026-09-08T22:18:00+01:00
-reason: persisted case flow and model configuration fixes
+triggered: 2026-09-09T18:52:00+01:00
+reason: working alpha gate passed; release location, bounded runner, evidence, resume and voice fixes for device testing
