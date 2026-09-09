@@ -26,6 +26,18 @@ export interface CaseEvent {
   label: string;
 }
 
+export interface EvidenceSource {
+  url: string;
+  title?: string;
+}
+
+export interface CaseEvidence {
+  id: string;
+  title: string;
+  body: string;
+  sources: EvidenceSource[];
+}
+
 export interface CarryCase {
   id: string;
   title: string;
@@ -38,4 +50,5 @@ export interface CarryCase {
   decisionLabel?: string;
   plan: PlanStep[];
   activity: CaseEvent[];
+  evidence: CaseEvidence[];
 }
