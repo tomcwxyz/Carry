@@ -1,4 +1,3 @@
-import { generateText, Output } from 'ai';
 import { z } from 'zod';
 
 const domainSchema = z.enum(['personal', 'household', 'family', 'admin', 'purchase', 'travel', 'work', 'code', 'other']);
@@ -21,6 +20,33 @@ export const understoodCaseSchema = z.object({
 
 export type UnderstoodCase = z.infer<typeof understoodCaseSchema>;
 
+const understoodCaseJsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    title: { type: 'string' },
+    outcome: { type: 'string' },
+    summary: { type: 'string' },
+    domain: { type: 'string', enum: ['personal', 'household', 'family', 'admin', 'purchase', 'travel', 'work', 'code', 'other'] },
+    state: { type: 'string', enum: ['carrying', 'needs_user'] },
+    nextAction: { type: 'string' },
+    decisionLabel: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+    plan: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          label: { type: 'string' },
+          state: { type: 'string', enum: ['done', 'active', 'todo'] },
+        },
+        required: ['label', 'state'],
+      },
+    },
+  },
+  required: ['title', 'outcome', 'summary', 'domain', 'state', 'nextAction', 'decisionLabel', 'plan'],
+} as const;
+
 const SYSTEM = `You are Carry, an agent that moves real-life and work cases towards completion.
 Turn the user's capture into a concise operational case.
 Do not turn it into a conventional to-do item. Define what finished looks like and a small plan.
@@ -28,19 +54,72 @@ Default to state=carrying when Carry can make useful progress without the user. 
 For physical or household problems, prefer safe assessment and arranging appropriate help; do not encourage risky DIY.
 The first active plan step should be the next useful thing Carry can do. Never claim an external action has already happened.`;
 
+type OpenAIResponse = {
+  output?: Array<{
+    type?: string;
+    content?: Array<{
+      type?: string;
+      text?: string;
+    }>;
+  }>;
+  error?: { message?: string };
+};
+
+function outputText(response: OpenAIResponse) {
+  for (const item of response.output ?? []) {
+    if (item.type !== 'message') continue;
+    for (const content of item.content ?? []) {
+      if (content.type === 'output_text' && content.text?.trim()) return content.text.trim();
+    }
+  }
+  return null;
+}
+
 export function getCaseModel() {
-  return process.env.CARRY_CASE_MODEL?.trim() || 'openai/gpt-5.6-luna';
+  const configured = process.env.CARRY_CASE_MODEL?.trim();
+  return (configured || 'gpt-5.6-luna').replace(/^openai\//, '');
+}
+
+export function getCaseProvider() {
+  return 'openai-direct';
 }
 
 export async function understandCase(sourceText: string): Promise<UnderstoodCase> {
-  const { output } = await generateText({
-    model: getCaseModel(),
-    system: SYSTEM,
-    output: Output.object({ schema: understoodCaseSchema }),
-    prompt: sourceText,
+  const key = process.env.OPENAI_API_KEY?.trim();
+  if (!key) throw new Error('OPENAI_API_KEY is not configured');
+
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${key}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: getCaseModel(),
+      instructions: SYSTEM,
+      input: sourceText,
+      store: false,
+      max_output_tokens: 900,
+      text: {
+        format: {
+          type: 'json_schema',
+          name: 'carry_case',
+          strict: true,
+          schema: understoodCaseJsonSchema,
+        },
+      },
+    }),
   });
 
-  return output;
+  const data = await response.json() as OpenAIResponse;
+  if (!response.ok) {
+    throw new Error(`OpenAI case understanding failed with ${response.status}: ${data.error?.message ?? 'unknown error'}`);
+  }
+
+  const text = outputText(data);
+  if (!text) throw new Error('OpenAI case understanding returned no structured output');
+
+  return understoodCaseSchema.parse(JSON.parse(text));
 }
 
 export function fallbackCase(sourceText: string): UnderstoodCase {

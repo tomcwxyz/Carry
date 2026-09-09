@@ -1,5 +1,13 @@
 # Carry — roadmap
 
+## Current focus — working alpha gate
+
+The installed Android build has proved the shell, persistence and case-loading path. We will now iterate on the Vercel backend without publishing another APK until Carry can materially advance a case.
+
+The release/test contract is in [`WORKING_ALPHA_PLAN.md`](./WORKING_ALPHA_PLAN.md). In particular, do not touch `.eas/android-alpha-trigger` simply to package a backend fix. The next Android build happens only after the working-alpha gate passes.
+
+Roadmap alpha numbers describe capability stages; GitHub/Android build numbers are only build artefacts.
+
 ## Alpha 0 — mobile foundation
 
 - [x] product principles and case model documented
@@ -14,14 +22,14 @@ Exit: the app can be installed and the intended interaction model is tangible wi
 
 ## Alpha 1 — capture → case
 
-- voice upload + transcription
-- text and voice produce the same structured capture envelope
-- Neon + Drizzle case/event schema
-- outcome/domain/entity extraction
-- ambiguity policy: infer when safe, ask only when materially blocked
-- case created immediately after capture
-- first bounded orchestration run
-- local optimistic UI while server work continues
+- [x] voice upload + transcription path
+- [x] text and voice produce the same structured capture envelope
+- [x] Neon case/event schema
+- [ ] reliable outcome/domain/entity extraction in production
+- [x] ambiguity policy: infer when safe, ask only when materially blocked
+- [x] case created immediately after capture
+- [ ] first bounded orchestration run
+- [ ] local optimistic UI while server work continues
 
 **Golden path:** “My gutter is blocked” → useful household case with sensible next actions.
 
