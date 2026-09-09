@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { getCaseModel } from './case-understanding.js';
+import { decisionInputJsonSchema, decisionInputSchema, normaliseDecisionInput, type DecisionInput } from './decision-input.js';
 import { getSql } from './db.js';
 import { createOpenAIResponse, getOpenAIOutputText } from './openai-response.js';
 import { researchWeb, type ResearchResult } from './research-worker.js';
@@ -19,6 +20,7 @@ const rawNextStepSchema = z.object({
   summary: z.string(),
   nextAction: z.string(),
   decisionLabel: z.string().nullable(),
+  decisionInput: decisionInputSchema.nullable(),
   researchQuery: z.string().nullable(),
   plan: z.array(rawStepSchema).min(2),
 });
@@ -28,6 +30,7 @@ const nextStepSchema = z.object({
   summary: z.string().min(4).max(220),
   nextAction: z.string().min(4).max(260),
   decisionLabel: z.string().max(140).nullable(),
+  decisionInput: decisionInputSchema.nullable(),
   researchQuery: z.string().max(500).nullable(),
   plan: z.array(stepSchema).min(2).max(6),
 });
@@ -37,6 +40,7 @@ const rawResearchSynthesisSchema = z.object({
   summary: z.string(),
   nextAction: z.string(),
   decisionLabel: z.string().nullable(),
+  decisionInput: decisionInputSchema.nullable(),
   resultTitle: z.string(),
   resultBody: z.string(),
   plan: z.array(rawStepSchema).min(2),
@@ -47,6 +51,7 @@ const researchSynthesisSchema = z.object({
   summary: z.string().min(4).max(220),
   nextAction: z.string().min(4).max(260),
   decisionLabel: z.string().max(140).nullable(),
+  decisionInput: decisionInputSchema.nullable(),
   resultTitle: z.string().min(3).max(100),
   resultBody: z.string().min(8).max(1800),
   plan: z.array(stepSchema).min(2).max(6),
@@ -60,6 +65,7 @@ const nextStepJsonSchema = {
     summary: { type: 'string' },
     nextAction: { type: 'string' },
     decisionLabel: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+    decisionInput: decisionInputJsonSchema,
     researchQuery: { anyOf: [{ type: 'string' }, { type: 'null' }] },
     plan: {
       type: 'array',
@@ -74,7 +80,7 @@ const nextStepJsonSchema = {
       },
     },
   },
-  required: ['kind', 'summary', 'nextAction', 'decisionLabel', 'researchQuery', 'plan'],
+  required: ['kind', 'summary', 'nextAction', 'decisionLabel', 'decisionInput', 'researchQuery', 'plan'],
 } as const;
 
 const researchSynthesisJsonSchema = {
@@ -85,11 +91,12 @@ const researchSynthesisJsonSchema = {
     summary: { type: 'string' },
     nextAction: { type: 'string' },
     decisionLabel: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+    decisionInput: decisionInputJsonSchema,
     resultTitle: { type: 'string' },
     resultBody: { type: 'string' },
     plan: nextStepJsonSchema.properties.plan,
   },
-  required: ['kind', 'summary', 'nextAction', 'decisionLabel', 'resultTitle', 'resultBody', 'plan'],
+  required: ['kind', 'summary', 'nextAction', 'decisionLabel', 'decisionInput', 'resultTitle', 'resultBody', 'plan'],
 } as const;
 
 type NextStep = z.infer<typeof nextStepSchema>;
@@ -97,7 +104,7 @@ type ResearchSynthesis = z.infer<typeof researchSynthesisSchema>;
 type AppliedKind = Exclude<NextStep['kind'], 'research'>;
 
 export type CarryRunResult =
-  | { kind: 'needs_user'; nextAction: string; decisionLabel: string | null }
+  | { kind: 'needs_user'; nextAction: string; decisionLabel: string | null; decisionInput: DecisionInput }
   | { kind: 'progress'; nextAction: string }
   | { kind: 'waiting'; nextAction: string }
   | { kind: 'done'; nextAction: string };
@@ -125,6 +132,7 @@ Use waiting only for a real external condition already in motion. Use done only 
 Never claim that Carry booked, bought, sent, called or otherwise acted externally unless the case events contain evidence that action happened.
 For household services, once location/building details are available, research providers rather than asking the user to do the research.
 For purchases, once requirements are adequate, research options rather than asking the user to browse.
+When kind=needs_user, decisionInput tells the mobile app how to collect the blocking input. Use kind=location only when the user's current/place location is genuinely the missing information. Set askRadius=true only when Carry will search for nearby providers, places or options and the distance matters. For choices, dates, building details or other facts use kind=text. For every other kind, decisionLabel and decisionInput must be null.
 Keep every field terse. Keep the plan small, ordered and honest. Unless the case is done, exactly one plan step should be active. Earlier completed steps should be done and later steps should be todo.`;
 
 function clip(value: string, max: number) {
@@ -142,23 +150,27 @@ function normaliseRawPlan(plan: Array<z.infer<typeof rawStepSchema>>): PlanStep[
 
 function normaliseNextStep(value: unknown): NextStep {
   const raw = rawNextStepSchema.parse(value);
+  const hasHandback = raw.kind === 'needs_user' && Boolean(raw.decisionLabel?.trim());
   return nextStepSchema.parse({
     kind: raw.kind,
     summary: clip(raw.summary, 220),
     nextAction: clip(raw.nextAction, 260),
-    decisionLabel: raw.decisionLabel ? clip(raw.decisionLabel, 140) : null,
-    researchQuery: raw.researchQuery ? clip(raw.researchQuery, 500) : null,
+    decisionLabel: hasHandback && raw.decisionLabel ? clip(raw.decisionLabel, 140) : null,
+    decisionInput: normaliseDecisionInput(raw.decisionInput, hasHandback),
+    researchQuery: raw.kind === 'research' && raw.researchQuery ? clip(raw.researchQuery, 500) : null,
     plan: normaliseRawPlan(raw.plan),
   });
 }
 
 function normaliseResearchSynthesis(value: unknown): ResearchSynthesis {
   const raw = rawResearchSynthesisSchema.parse(value);
+  const hasHandback = raw.kind === 'needs_user' && Boolean(raw.decisionLabel?.trim());
   return researchSynthesisSchema.parse({
     kind: raw.kind,
     summary: clip(raw.summary, 220),
     nextAction: clip(raw.nextAction, 260),
-    decisionLabel: raw.decisionLabel ? clip(raw.decisionLabel, 140) : null,
+    decisionLabel: hasHandback && raw.decisionLabel ? clip(raw.decisionLabel, 140) : null,
+    decisionInput: normaliseDecisionInput(raw.decisionInput, hasHandback),
     resultTitle: clip(raw.resultTitle, 100),
     resultBody: clip(raw.resultBody, 1800),
     plan: normaliseRawPlan(raw.plan),
@@ -246,6 +258,8 @@ Respect the user's stated location and exclude evidence for same-named places in
 For a shortlist or recommendation, make the useful comparison now, then ask for one concrete choice only if the next consequential action requires approval.
 Do not invent ratings, prices, availability, contact details or actions. Distinguish indicative local price guides from provider-specific prices.
 Never claim an external booking, purchase, message or call occurred.
+If kind=needs_user, use decisionInput kind=location only if a location is still genuinely missing. A provider/product choice or other approval is kind=text. Set askRadius only when the missing location will be used for a nearby search.
+For non-needs_user results, decisionLabel and decisionInput must be null.
 Keep every field concise and resultBody suitable for one mobile card.
 Unless the case is done, return exactly one active plan step.`,
     input: `CASE\n${snapshotText(snapshot)}\n\nRESEARCH\n${research.text}\n\nSOURCES\n${sourceList || 'No source URLs were returned.'}`,
@@ -309,15 +323,26 @@ function stateFor(kind: AppliedKind) {
   return 'carrying';
 }
 
+function storedDecisionInput(value: unknown): DecisionInput {
+  if (!value || typeof value !== 'object') return { kind: 'text', askRadius: false };
+  const decision = value as Record<string, unknown>;
+  if (decision.inputKind !== 'location') return { kind: 'text', askRadius: false };
+  return { kind: 'location', askRadius: decision.askRadius === true };
+}
+
 async function applyResult(
   caseId: string,
-  result: Pick<NextStep, 'kind' | 'summary' | 'nextAction' | 'decisionLabel' | 'plan'> | ResearchSynthesis,
+  result: Pick<NextStep, 'kind' | 'summary' | 'nextAction' | 'decisionLabel' | 'decisionInput' | 'plan'> | ResearchSynthesis,
 ) {
   if (result.kind === 'research') throw new Error('Research must be completed before applying a case result');
   const sql = getSql();
   const kind: AppliedKind = result.kind;
   const state = stateFor(kind);
-  const decision = kind === 'needs_user' && result.decisionLabel ? { label: result.decisionLabel } : null;
+  const decision = kind === 'needs_user' && result.decisionLabel ? {
+    label: result.decisionLabel,
+    inputKind: result.decisionInput?.kind ?? 'text',
+    askRadius: result.decisionInput?.askRadius ?? false,
+  } : null;
   const plan = withStepIds(normalisePlan(result.plan, kind));
 
   await sql`
@@ -331,7 +356,10 @@ async function applyResult(
   if (kind === 'needs_user' && result.decisionLabel) {
     await sql`
       INSERT INTO carry_case_events (case_id, type, actor, label, payload)
-      VALUES (${caseId}::uuid, 'decision_requested', 'carry', ${result.decisionLabel}, '{}'::jsonb)
+      VALUES (
+        ${caseId}::uuid, 'decision_requested', 'carry', ${result.decisionLabel},
+        ${JSON.stringify({ inputKind: decision?.inputKind ?? 'text', askRadius: decision?.askRadius ?? false })}::jsonb
+      )
     `;
   } else if (kind === 'waiting') {
     await sql`
@@ -347,7 +375,14 @@ async function applyResult(
 }
 
 function publicResult(result: Exclude<NextStep, { kind: 'research' }> | ResearchSynthesis): CarryRunResult {
-  if (result.kind === 'needs_user') return { kind: 'needs_user', nextAction: result.nextAction, decisionLabel: result.decisionLabel };
+  if (result.kind === 'needs_user') {
+    return {
+      kind: 'needs_user',
+      nextAction: result.nextAction,
+      decisionLabel: result.decisionLabel,
+      decisionInput: result.decisionInput ?? { kind: 'text', askRadius: false },
+    };
+  }
   if (result.kind === 'waiting') return { kind: 'waiting', nextAction: result.nextAction };
   if (result.kind === 'done') return { kind: 'done', nextAction: result.nextAction };
   return { kind: 'progress', nextAction: result.nextAction };
@@ -358,7 +393,15 @@ export async function runCase(caseId: string, ownerKey: string): Promise<CarryRu
   if (!snapshot) throw new Error('Case not found');
 
   if (snapshot.state === 'needs_user') {
-    return { kind: 'needs_user', nextAction: snapshot.nextAction ?? 'Carry needs your input.', decisionLabel: typeof snapshot.decision === 'object' && snapshot.decision && 'label' in snapshot.decision ? String((snapshot.decision as { label?: unknown }).label ?? '') : null };
+    const decisionLabel = typeof snapshot.decision === 'object' && snapshot.decision && 'label' in snapshot.decision
+      ? String((snapshot.decision as { label?: unknown }).label ?? '')
+      : null;
+    return {
+      kind: 'needs_user',
+      nextAction: snapshot.nextAction ?? 'Carry needs your input.',
+      decisionLabel,
+      decisionInput: storedDecisionInput(snapshot.decision),
+    };
   }
   if (snapshot.state === 'waiting') return { kind: 'waiting', nextAction: snapshot.nextAction ?? 'Carry is waiting.' };
   if (snapshot.state === 'done') return { kind: 'done', nextAction: snapshot.nextAction ?? 'This case is complete.' };
