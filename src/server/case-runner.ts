@@ -10,6 +10,8 @@ const stepSchema = z.object({
   state: z.enum(['done', 'active', 'todo']),
 });
 
+type PlanStep = z.infer<typeof stepSchema>;
+
 const nextStepSchema = z.object({
   kind: z.enum(['needs_user', 'research', 'progress', 'waiting', 'done']),
   summary: z.string().min(4).max(220),
@@ -72,6 +74,8 @@ const researchSynthesisJsonSchema = {
 type NextStep = z.infer<typeof nextStepSchema>;
 type ResearchSynthesis = z.infer<typeof researchSynthesisSchema>;
 
+type AppliedKind = Exclude<NextStep['kind'], 'research'>;
+
 export type CarryRunResult =
   | { kind: 'needs_user'; nextAction: string; decisionLabel: string | null }
   | { kind: 'progress'; nextAction: string }
@@ -101,9 +105,33 @@ Use waiting only for a real external condition already in motion. Use done only 
 Never claim that Carry booked, bought, sent, called or otherwise acted externally unless the case events contain evidence that action happened.
 For household services, once location/building details are available, research providers rather than asking the user to do the research.
 For purchases, once requirements are adequate, research options rather than asking the user to browse.
-Keep the plan small and update step states to match what has actually happened.`;
+Keep the plan small, ordered and honest. Unless the case is done, exactly one plan step should be active. Earlier completed steps should be done and later steps should be todo.`;
 
-function withStepIds(plan: Array<{ label: string; state: 'done' | 'active' | 'todo' }>) {
+function normalisePlan(plan: PlanStep[], kind: AppliedKind): PlanStep[] {
+  const copy = plan.map((step) => ({ ...step }));
+  if (kind === 'done') return copy.map((step) => ({ ...step, state: 'done' as const }));
+
+  const activeIndexes = copy.flatMap((step, index) => step.state === 'active' ? [index] : []);
+  if (activeIndexes.length > 1) {
+    const keep = activeIndexes.at(-1)!;
+    return copy.map((step, index) => {
+      if (step.state !== 'active' || index === keep) return step;
+      return { ...step, state: index < keep ? 'done' as const : 'todo' as const };
+    });
+  }
+
+  if (activeIndexes.length === 1) return copy;
+
+  const firstTodo = copy.findIndex((step) => step.state === 'todo');
+  if (firstTodo >= 0) {
+    return copy.map((step, index) => index === firstTodo ? { ...step, state: 'active' as const } : step);
+  }
+
+  const lastIndex = copy.length - 1;
+  return copy.map((step, index) => index === lastIndex ? { ...step, state: 'active' as const } : step);
+}
+
+function withStepIds(plan: PlanStep[]) {
   return plan.map((step, index) => ({ ...step, id: `step-${index + 1}` }));
 }
 
@@ -156,10 +184,12 @@ async function synthesiseResearch(snapshot: CaseSnapshot, research: ResearchResu
     model: getCaseModel(),
     instructions: `You are Carry. Turn grounded research into the next operational case state.
 Only make factual claims supported by the research text and source list supplied below.
+Respect the user's stated location and exclude evidence for same-named places in other countries.
 For a shortlist or recommendation, make the useful comparison now, then ask for one concrete choice only if the next consequential action requires approval.
-Do not invent ratings, prices, availability, contact details or actions.
+Do not invent ratings, prices, availability, contact details or actions. Distinguish indicative local price guides from provider-specific prices.
 Never claim an external booking, purchase, message or call occurred.
-Keep resultBody concise enough for a mobile screen and explain why the options are useful.`,
+Keep resultBody concise enough for a mobile screen and explain why the options are useful.
+Unless the case is done, return exactly one active plan step.`,
     input: `CASE\n${snapshotText(snapshot)}\n\nRESEARCH\n${research.text}\n\nSOURCES\n${sourceList || 'No source URLs were returned.'}`,
     max_output_tokens: 1500,
     text: {
@@ -214,7 +244,7 @@ async function loadSnapshot(caseId: string, ownerKey: string): Promise<CaseSnaps
   };
 }
 
-function stateFor(kind: Exclude<NextStep['kind'], 'research'> | ResearchSynthesis['kind']) {
+function stateFor(kind: AppliedKind) {
   if (kind === 'needs_user') return 'needs_user';
   if (kind === 'waiting') return 'waiting';
   if (kind === 'done') return 'done';
@@ -227,9 +257,10 @@ async function applyResult(
 ) {
   if (result.kind === 'research') throw new Error('Research must be completed before applying a case result');
   const sql = getSql();
-  const state = stateFor(result.kind);
-  const decision = result.kind === 'needs_user' && result.decisionLabel ? { label: result.decisionLabel } : null;
-  const plan = withStepIds(result.plan);
+  const kind: AppliedKind = result.kind;
+  const state = stateFor(kind);
+  const decision = kind === 'needs_user' && result.decisionLabel ? { label: result.decisionLabel } : null;
+  const plan = withStepIds(normalisePlan(result.plan, kind));
 
   await sql`
     UPDATE carry_cases
@@ -239,17 +270,17 @@ async function applyResult(
     WHERE id = ${caseId}::uuid
   `;
 
-  if (result.kind === 'needs_user' && result.decisionLabel) {
+  if (kind === 'needs_user' && result.decisionLabel) {
     await sql`
       INSERT INTO carry_case_events (case_id, type, actor, label, payload)
       VALUES (${caseId}::uuid, 'decision_requested', 'carry', ${result.decisionLabel}, '{}'::jsonb)
     `;
-  } else if (result.kind === 'waiting') {
+  } else if (kind === 'waiting') {
     await sql`
       INSERT INTO carry_case_events (case_id, type, actor, label, payload)
       VALUES (${caseId}::uuid, 'waiting_started', 'carry', ${result.nextAction}, '{}'::jsonb)
     `;
-  } else if (result.kind === 'done') {
+  } else if (kind === 'done') {
     await sql`
       INSERT INTO carry_case_events (case_id, type, actor, label, payload)
       VALUES (${caseId}::uuid, 'case_completed', 'carry', ${result.summary}, '{}'::jsonb)
