@@ -1,7 +1,10 @@
 const base = (process.env.CARRY_API_URL || 'https://carry-gilt.vercel.app').replace(/\/$/, '');
-const owner = process.env.CARRY_SMOKE_OWNER || `alpha-smoke-${Date.now()}`;
+const owner = process.env.CARRY_SMOKE_OWNER || `alpha-smoke-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const prompt = process.argv.slice(2).join(' ').trim() || 'My gutter is blocked';
 const responseText = process.env.CARRY_SMOKE_RESPONSE || 'NE3 5HN, two-storey house, normal access from the front and rear.';
+const expectedDomain = process.env.CARRY_EXPECT_DOMAIN?.trim();
+const requireEvidence = process.env.CARRY_REQUIRE_EVIDENCE !== 'false';
+const forbiddenSourcePattern = process.env.CARRY_FORBID_SOURCE_PATTERN?.trim();
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -25,6 +28,26 @@ async function getCase(caseId) {
   return item;
 }
 
+function validatePlan(item) {
+  assert(Array.isArray(item.plan) && item.plan.length >= 2, 'Case has no useful plan');
+  const activeCount = item.plan.filter((step) => step.state === 'active').length;
+  if (item.state === 'done') {
+    assert(activeCount === 0, `Completed case has ${activeCount} active plan steps`);
+  } else {
+    assert(activeCount === 1, `Expected exactly one active plan step, got ${activeCount}`);
+  }
+}
+
+function validateEvidence(item) {
+  if (!requireEvidence) return;
+  assert(Array.isArray(item.evidence) && item.evidence.length > 0, 'Case did not produce grounded research evidence');
+  const sourceUrls = item.evidence.flatMap((entry) => Array.isArray(entry.sources) ? entry.sources.map((source) => source.url) : []);
+  assert(sourceUrls.length > 0, 'Research evidence has no source URLs');
+  if (forbiddenSourcePattern) {
+    assert(!sourceUrls.some((url) => String(url).includes(forbiddenSourcePattern)), `Research included forbidden/irrelevant source pattern: ${forbiddenSourcePattern}`);
+  }
+}
+
 async function main() {
   console.log(`Carry alpha smoke: ${prompt}`);
   console.log(`API: ${base}`);
@@ -45,10 +68,11 @@ async function main() {
   let item = await getCase(capture.caseId);
   assert(item.summary !== 'Carry saved this, but could not analyse it yet.', 'Case understanding fell back instead of succeeding');
   assert(item.domain && item.domain !== 'other', `Expected a useful domain, got ${item.domain}`);
+  if (expectedDomain) assert(item.domain === expectedDomain, `Expected domain ${expectedDomain}, got ${item.domain}`);
   assert(typeof item.nextAction === 'string' && item.nextAction.length > 3, 'Case has no useful next action');
-  assert(Array.isArray(item.plan) && item.plan.length >= 2, 'Case has no useful plan');
 
   if (item.state === 'needs_user') {
+    assert(responseText.trim(), 'Case needs a response but CARRY_SMOKE_RESPONSE is empty');
     console.log(`Hand-back: ${item.nextAction}`);
     console.log(`Responding: ${responseText}`);
     const respondResponse = await fetch(`${base}/api/cases/${encodeURIComponent(capture.caseId)}/respond`, {
@@ -66,11 +90,8 @@ async function main() {
 
   assert(Array.isArray(item.activity) && item.activity.length >= 4, 'Case did not record a useful action trail');
   assert(typeof item.nextAction === 'string' && item.nextAction.length > 3, 'Advanced case has no useful next action');
-
-  if (item.domain === 'household') {
-    assert(Array.isArray(item.evidence) && item.evidence.length > 0, 'Household case did not produce grounded research evidence after location was supplied');
-    assert(item.evidence.some((entry) => Array.isArray(entry.sources) && entry.sources.length > 0), 'Research evidence has no source URLs');
-  }
+  validatePlan(item);
+  validateEvidence(item);
 
   console.log('\nPASS');
   console.log(JSON.stringify({
