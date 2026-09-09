@@ -6,6 +6,20 @@ const domainSchema = z.enum(['personal', 'household', 'family', 'admin', 'purcha
 const stateSchema = z.enum(['carrying', 'needs_user']);
 const stepStateSchema = z.enum(['done', 'active', 'todo']);
 
+const rawUnderstoodCaseSchema = z.object({
+  title: z.string(),
+  outcome: z.string(),
+  summary: z.string(),
+  domain: domainSchema,
+  state: stateSchema,
+  nextAction: z.string(),
+  decisionLabel: z.string().nullable(),
+  plan: z.array(z.object({
+    label: z.string(),
+    state: stepStateSchema,
+  })).min(2),
+});
+
 export const understoodCaseSchema = z.object({
   title: z.string().min(2).max(80),
   outcome: z.string().min(8).max(280),
@@ -54,7 +68,31 @@ Turn the user's capture into a concise operational case.
 Do not turn it into a conventional to-do item. Define what finished looks like and a small plan.
 Default to state=carrying when Carry can make useful progress without the user. Use needs_user only when a genuine decision or missing fact blocks progress now.
 For physical or household problems, prefer safe assessment and arranging appropriate help; do not encourage risky DIY.
-The first active plan step should be the next useful thing Carry can do. Never claim an external action has already happened.`;
+The first active plan step should be the next useful thing Carry can do. Never claim an external action has already happened.
+Be terse: title under 60 characters, summary one short sentence, decision label a short prompt, and normally 2-4 plan steps.`;
+
+function clip(value: string, max: number) {
+  const trimmed = value.trim();
+  if (trimmed.length <= max) return trimmed;
+  return `${trimmed.slice(0, Math.max(1, max - 1)).trimEnd()}…`;
+}
+
+function normaliseUnderstoodCase(value: unknown): UnderstoodCase {
+  const raw = rawUnderstoodCaseSchema.parse(value);
+  return understoodCaseSchema.parse({
+    title: clip(raw.title, 80),
+    outcome: clip(raw.outcome, 280),
+    summary: clip(raw.summary, 180),
+    domain: raw.domain,
+    state: raw.state,
+    nextAction: clip(raw.nextAction, 220),
+    decisionLabel: raw.decisionLabel ? clip(raw.decisionLabel, 80) : null,
+    plan: raw.plan.slice(0, 6).map((step) => ({
+      label: clip(step.label, 140),
+      state: step.state,
+    })),
+  });
+}
 
 export function getCaseModel() {
   const configured = process.env.CARRY_CASE_MODEL?.trim();
@@ -70,7 +108,7 @@ export async function understandCase(sourceText: string): Promise<UnderstoodCase
     model: getCaseModel(),
     instructions: SYSTEM,
     input: sourceText,
-    max_output_tokens: 900,
+    max_output_tokens: 1800,
     text: {
       format: {
         type: 'json_schema',
@@ -84,7 +122,7 @@ export async function understandCase(sourceText: string): Promise<UnderstoodCase
   const text = getOpenAIOutputText(data);
   if (!text) throw new Error('OpenAI case understanding returned no structured output');
 
-  return understoodCaseSchema.parse(JSON.parse(text));
+  return normaliseUnderstoodCase(JSON.parse(text));
 }
 
 export function fallbackCase(sourceText: string): UnderstoodCase {
@@ -92,7 +130,7 @@ export function fallbackCase(sourceText: string): UnderstoodCase {
   const words = cleaned.replace(/[.!?]+$/g, '').split(/\s+/).slice(0, 7).join(' ');
   return {
     title: words || 'New case',
-    outcome: `Get this sorted: ${cleaned}`,
+    outcome: clip(`Get this sorted: ${cleaned}`, 280),
     summary: 'Carry saved this, but could not analyse it yet.',
     domain: 'other',
     state: 'carrying',
