@@ -14,22 +14,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  gutter-golden-path:
+  working-alpha-recipes:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - recipe: gutter
+            prompt: My gutter is blocked
+            domain: household
+            response: NE3 5HN, two-storey house, normal access from the front and rear. Water is not entering the house.
+            forbid_source: guttervac.com.au
+          - recipe: purchase
+            prompt: Find me a quiet mechanical keyboard for a Windows PC, UK layout, wireless, under £100. I care more about quiet typing and build quality than gaming.
+            domain: purchase
+            response: No other constraints. Compare current UK options and recommend the best fit.
+            forbid_source: ''
+          - recipe: admin
+            prompt: Find the current official process for renewing a UK driving licence online at age 70, including what I need to prepare and the next useful step.
+            domain: admin
+            response: This is a standard UK car driving licence and there are no medical changes to report.
+            forbid_source: ''
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Wait for Vercel production and run golden path
+      - name: Wait for Vercel production and run ${{ matrix.recipe }} golden path
         env:
           CARRY_API_URL: https://carry-gilt.vercel.app
+          CARRY_EXPECT_DOMAIN: ${{ matrix.domain }}
+          CARRY_SMOKE_RESPONSE: ${{ matrix.response }}
+          CARRY_REQUIRE_EVIDENCE: 'true'
+          CARRY_FORBID_SOURCE_PATTERN: ${{ matrix.forbid_source }}
         run: |
           sleep 35
           for attempt in 1 2 3; do
-            echo "Smoke attempt $attempt"
-            if npm run smoke:alpha; then
+            echo "Smoke attempt $attempt for ${{ matrix.recipe }}"
+            if npm run smoke:alpha -- "${{ matrix.prompt }}"; then
               exit 0
             fi
             sleep 20
