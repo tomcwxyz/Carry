@@ -6,7 +6,6 @@ on:
     branches: [main]
     paths:
       - 'scripts/release-gate.mjs'
-      - 'scripts/fixtures/carry-gutter-test.mp3'
       - '.github/workflows/working-alpha-gate.yml'
       - '.eas/working-alpha-gate-trigger'
 
@@ -23,7 +22,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Generate deterministic spoken voice fixture
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq espeak-ng
+          espeak-ng -v en-gb -s 145 -w /tmp/carry-gutter-test.wav "My gutter is blocked"
+          test -s /tmp/carry-gutter-test.wav
+          file /tmp/carry-gutter-test.wav
       - name: Run reliability and voice gate against production
         env:
           CARRY_API_URL: https://carry-gilt.vercel.app
+          CARRY_VOICE_FIXTURE: /tmp/carry-gutter-test.wav
         run: npm run gate:alpha
