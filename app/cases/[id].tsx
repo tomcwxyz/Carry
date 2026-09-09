@@ -4,7 +4,8 @@ import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, Te
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { continueCase, fetchCase, respondToCase } from '../../src/features/cases/case-service';
-import type { CarryCase } from '../../src/features/cases/types';
+import type { CarryCase, CarryCaseResponse } from '../../src/features/cases/types';
+import { LocationDecisionInput } from '../../src/features/location/LocationDecisionInput';
 import { colours, radius, spacing } from '../../src/theme/tokens';
 
 const stateLabels = {
@@ -38,12 +39,13 @@ export default function CaseScreen() {
     return () => { active = false; };
   }, [load]);
 
-  async function submitResponse() {
-    if (!id || !responseText.trim() || working) return;
+  async function submitResponse(response: string | CarryCaseResponse) {
+    if (!id || working) return;
+    if (typeof response === 'string' && !response.trim()) return;
     setWorking(true);
     setError(null);
     try {
-      await respondToCase(id, responseText.trim());
+      await respondToCase(id, response);
       setResponseText('');
       await load();
     } catch (cause) {
@@ -87,6 +89,7 @@ export default function CaseScreen() {
 
   const canRetry = item.state === 'carrying' && item.nextAction?.toLowerCase().includes('retry');
   const evidenceItems = item.evidence ?? [];
+  const decisionInput = item.decisionInput ?? { kind: 'text' as const, askRadius: false };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -104,22 +107,32 @@ export default function CaseScreen() {
           {item.state === 'needs_user' ? (
             <View style={styles.responseCard}>
               {item.decisionLabel && item.decisionLabel !== item.nextAction ? <Text style={styles.responsePrompt}>{item.decisionLabel}</Text> : null}
-              <TextInput
-                value={responseText}
-                onChangeText={setResponseText}
-                placeholder="Tell Carry what it needs to know"
-                placeholderTextColor={colours.muted}
-                multiline
-                editable={!working}
-                style={styles.responseInput}
-              />
-              <Pressable
-                disabled={!responseText.trim() || working}
-                onPress={submitResponse}
-                style={[styles.actionButton, (!responseText.trim() || working) && styles.disabledButton]}
-              >
-                {working ? <ActivityIndicator color={colours.white} /> : <Text style={styles.actionButtonText}>Continue with this</Text>}
-              </Pressable>
+              {decisionInput.kind === 'location' ? (
+                <LocationDecisionInput
+                  decision={decisionInput}
+                  disabled={working}
+                  onSubmit={(response) => { void submitResponse(response); }}
+                />
+              ) : (
+                <>
+                  <TextInput
+                    value={responseText}
+                    onChangeText={setResponseText}
+                    placeholder="Tell Carry what it needs to know"
+                    placeholderTextColor={colours.muted}
+                    multiline
+                    editable={!working}
+                    style={styles.responseInput}
+                  />
+                  <Pressable
+                    disabled={!responseText.trim() || working}
+                    onPress={() => { void submitResponse(responseText.trim()); }}
+                    style={[styles.actionButton, (!responseText.trim() || working) && styles.disabledButton]}
+                  >
+                    {working ? <ActivityIndicator color={colours.white} /> : <Text style={styles.actionButtonText}>Continue with this</Text>}
+                  </Pressable>
+                </>
+              )}
             </View>
           ) : null}
 
