@@ -24,9 +24,15 @@ jobs:
           node-version: 22
       - name: Generate deterministic spoken voice fixture
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq espeak-ng
-          espeak-ng -v en-gb -s 145 -w /tmp/carry-gutter-test.wav "My gutter is blocked"
+          if command -v espeak-ng >/dev/null 2>&1; then
+            SPEAK=espeak-ng
+          elif command -v espeak >/dev/null 2>&1; then
+            SPEAK=espeak
+          else
+            sudo apt-get install -y -qq espeak-ng
+            SPEAK=espeak-ng
+          fi
+          "$SPEAK" -v en-gb -s 145 -w /tmp/carry-gutter-test.wav "My gutter is blocked"
           test -s /tmp/carry-gutter-test.wav
           file /tmp/carry-gutter-test.wav
       - name: Run reliability and voice gate against production
