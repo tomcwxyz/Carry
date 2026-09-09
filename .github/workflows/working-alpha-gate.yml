@@ -6,7 +6,7 @@ on:
     branches: [main]
     paths:
       - 'scripts/release-gate.mjs'
-      - 'scripts/fixtures/carry-gutter-test.webm'
+      - 'scripts/fixtures/carry-gutter-test.mp3'
       - '.github/workflows/working-alpha-gate.yml'
       - '.eas/working-alpha-gate-trigger'
 
