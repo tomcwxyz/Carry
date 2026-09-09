@@ -59,9 +59,13 @@ export async function POST(request: Request) {
     if (!capture?.id) throw new Error('Carry could not persist the capture');
 
     let understood;
+    let understandingFailed = false;
+    let understandingError: string | null = null;
     try {
       understood = await understandCase(sourceText);
     } catch (error) {
+      understandingFailed = true;
+      understandingError = error instanceof Error ? error.message : 'Unknown case understanding error';
       console.error('case_understanding_failed', error);
       understood = fallbackCase(sourceText);
     }
@@ -79,6 +83,23 @@ export async function POST(request: Request) {
     `;
     if (!created?.id) throw new Error('Carry could not create the case');
 
+    if (understandingFailed) {
+      await sql`
+        INSERT INTO carry_case_events (case_id, type, actor, label, payload)
+        VALUES
+          (${created.id}, 'captured', 'you', ${kind === 'voice' ? 'Told Carry about this by voice' : 'Told Carry about this'}, ${JSON.stringify({ kind })}::jsonb),
+          (${created.id}, 'analysis_failed', 'carry', 'Saved the case, but understanding failed and needs retrying', ${JSON.stringify({ error: understandingError })}::jsonb)
+      `;
+
+      await sql`
+        UPDATE carry_captures
+        SET status = 'failed', case_id = ${created.id}, error_code = 'case_understanding_failed', updated_at = now()
+        WHERE id = ${capture.id}
+      `;
+
+      return Response.json({ caseId: created.id, degraded: true });
+    }
+
     await sql`
       INSERT INTO carry_case_events (case_id, type, actor, label, payload)
       VALUES
@@ -88,11 +109,11 @@ export async function POST(request: Request) {
 
     await sql`
       UPDATE carry_captures
-      SET status = 'understood', case_id = ${created.id}, updated_at = now()
+      SET status = 'understood', case_id = ${created.id}, error_code = null, updated_at = now()
       WHERE id = ${capture.id}
     `;
 
-    return Response.json({ caseId: created.id });
+    return Response.json({ caseId: created.id, degraded: false });
   } catch (error) {
     console.error('capture_failed', error);
     return Response.json({ error: error instanceof Error ? error.message : 'Carry could not process this capture' }, { status: 500 });
