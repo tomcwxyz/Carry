@@ -8,7 +8,7 @@ type CaptureKind = 'text' | 'voice';
 type ServerFormData = { get(name: string): FormDataEntryValue | null };
 
 function transcriptionModel() {
-  const configured = process.env.CARRY_TRANSCRIPTION_MODEL ?? 'gpt-4o-mini-transcribe';
+  const configured = process.env.CARRY_TRANSCRIPTION_MODEL?.trim() || 'gpt-4o-mini-transcribe';
   return configured.replace(/^openai\//, '');
 }
 
