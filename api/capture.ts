@@ -1,5 +1,8 @@
+import { advanceCase } from '../src/server/case-advance.js';
 import { fallbackCase, understandCase } from '../src/server/case-understanding.js';
 import { getSql } from '../src/server/db.js';
+
+export const maxDuration = 60;
 
 type CaptureKind = 'text' | 'voice';
 type ServerFormData = { get(name: string): FormDataEntryValue | null };
@@ -107,13 +110,30 @@ export async function POST(request: Request) {
         (${created.id}, 'understood', 'carry', 'Turned the capture into an outcome and working plan', '{}'::jsonb)
     `;
 
+    if (understood.state === 'needs_user' && understood.decisionLabel) {
+      await sql`
+        INSERT INTO carry_case_events (case_id, type, actor, label, payload)
+        VALUES (${created.id}, 'decision_requested', 'carry', ${understood.decisionLabel}, '{}'::jsonb)
+      `;
+    }
+
     await sql`
       UPDATE carry_captures
       SET status = 'understood', case_id = ${created.id}, error_code = null, updated_at = now()
       WHERE id = ${capture.id}
     `;
 
-    return Response.json({ caseId: created.id, degraded: false });
+    if (understood.state === 'carrying') {
+      try {
+        const run = await advanceCase(created.id, ownerKey);
+        return Response.json({ caseId: created.id, degraded: false, run });
+      } catch (error) {
+        console.error('initial_case_run_failed', { caseId: created.id, error });
+        return Response.json({ caseId: created.id, degraded: false, runFailed: true });
+      }
+    }
+
+    return Response.json({ caseId: created.id, degraded: false, run: { kind: 'needs_user' } });
   } catch (error) {
     console.error('capture_failed', error);
     return Response.json({ error: error instanceof Error ? error.message : 'Carry could not process this capture' }, { status: 500 });

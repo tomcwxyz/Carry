@@ -1,4 +1,5 @@
 import { getCaseModel, getCaseProvider } from '../src/server/case-understanding.js';
+import { getResearchModel } from '../src/server/research-worker.js';
 
 export function GET() {
   return Response.json({
@@ -11,6 +12,8 @@ export function GET() {
       aiGateway: Boolean(process.env.AI_GATEWAY_API_KEY),
       caseProvider: getCaseProvider(),
       caseModel: getCaseModel(),
+      researchProvider: 'openai-web-search',
+      researchModel: getResearchModel(),
     },
   });
 }
