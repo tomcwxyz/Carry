@@ -1,0 +1,44 @@
+name: Voice Production Smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'api/capture.ts'
+      - 'scripts/voice-smoke.mjs'
+      - '.github/workflows/voice-smoke.yml'
+
+concurrency:
+  group: carry-voice-production-smoke
+  cancel-in-progress: true
+
+jobs:
+  voice-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Generate deterministic spoken WAV
+        run: |
+          if command -v espeak-ng >/dev/null 2>&1; then
+            SPEAK=espeak-ng
+          elif command -v espeak >/dev/null 2>&1; then
+            SPEAK=espeak
+          else
+            sudo apt-get install -y -qq espeak-ng
+            SPEAK=espeak-ng
+          fi
+          "$SPEAK" -v en-gb -s 145 -w /tmp/carry-gutter-test.wav "My gutter is blocked"
+          test -s /tmp/carry-gutter-test.wav
+          file /tmp/carry-gutter-test.wav
+      - name: Wait for production deployment
+        run: sleep 30
+      - name: Exercise production voice capture only
+        env:
+          CARRY_API_URL: https://carry-gilt.vercel.app
+          CARRY_VOICE_FIXTURE: /tmp/carry-gutter-test.wav
+        run: node scripts/voice-smoke.mjs
