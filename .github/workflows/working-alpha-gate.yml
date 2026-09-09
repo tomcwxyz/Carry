@@ -1,0 +1,29 @@
+name: Working Alpha Release Gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/release-gate.mjs'
+      - 'scripts/fixtures/carry-gutter-test.webm'
+      - '.github/workflows/working-alpha-gate.yml'
+      - '.eas/working-alpha-gate-trigger'
+
+concurrency:
+  group: carry-working-alpha-gate
+  cancel-in-progress: false
+
+jobs:
+  release-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run reliability and voice gate against production
+        env:
+          CARRY_API_URL: https://carry-gilt.vercel.app
+        run: npm run gate:alpha
