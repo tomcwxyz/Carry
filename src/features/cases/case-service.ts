@@ -1,4 +1,4 @@
-import type { CarryCase } from './types';
+import type { CarryCase, CarryCaseResponse } from './types';
 
 const apiBase = process.env.EXPO_PUBLIC_CARRY_API_URL?.replace(/\/$/, '');
 const ownerHeaders = { 'x-carry-owner': 'alpha-local' } as const;
@@ -34,11 +34,12 @@ export async function fetchCase(id: string): Promise<CarryCase> {
   return expectJson<CarryCase>(response, 'Carry case load');
 }
 
-export async function respondToCase(id: string, text: string) {
+export async function respondToCase(id: string, responseValue: string | CarryCaseResponse) {
+  const body: CarryCaseResponse = typeof responseValue === 'string' ? { text: responseValue } : responseValue;
   const response = await fetch(`${getApiBase()}/api/cases/${encodeURIComponent(id)}/respond`, {
     method: 'POST',
     headers: { ...ownerHeaders, 'content-type': 'application/json' },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify(body),
   });
   return expectJson<{ caseId: string; result?: { kind?: string; nextAction?: string } }>(response, 'Carry response');
 }
