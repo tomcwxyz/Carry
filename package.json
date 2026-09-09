@@ -10,7 +10,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "doctor": "npx expo-doctor@latest"
+    "doctor": "npx expo-doctor@latest",
+    "smoke:alpha": "node scripts/alpha-smoke.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
