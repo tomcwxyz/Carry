@@ -1,9 +1,9 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { fetchCase } from '../../src/features/cases/case-service';
+import { continueCase, fetchCase, respondToCase } from '../../src/features/cases/case-service';
 import type { CarryCase } from '../../src/features/cases/types';
 import { colours, radius, spacing } from '../../src/theme/tokens';
 
@@ -18,19 +18,56 @@ export default function CaseScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [item, setItem] = useState<CarryCase | undefined>();
   const [loading, setLoading] = useState(true);
+  const [working, setWorking] = useState(false);
+  const [responseText, setResponseText] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!id) return;
+    setError(null);
+    const loaded = await fetchCase(id);
+    setItem(loaded);
+  }, [id]);
+
+  useEffect(() => {
     let active = true;
     setLoading(true);
-    setError(null);
-    fetchCase(id)
-      .then((loaded) => { if (active) setItem(loaded); })
+    load()
       .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : 'Could not load this case'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [id]);
+  }, [load]);
+
+  async function submitResponse() {
+    if (!id || !responseText.trim() || working) return;
+    setWorking(true);
+    setError(null);
+    try {
+      await respondToCase(id, responseText.trim());
+      setResponseText('');
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Carry could not continue this case');
+      await load().catch(() => undefined);
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function retryCase() {
+    if (!id || working) return;
+    setWorking(true);
+    setError(null);
+    try {
+      await continueCase(id);
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Carry could not retry this case');
+      await load().catch(() => undefined);
+    } finally {
+      setWorking(false);
+    }
+  }
 
   if (loading) {
     return <SafeAreaView style={styles.safe}><View style={styles.empty}><ActivityIndicator /><Text style={styles.muted}>Carry is loading this case…</Text></View></SafeAreaView>;
@@ -48,9 +85,11 @@ export default function CaseScreen() {
     );
   }
 
+  const canRetry = item.state === 'carrying' && item.nextAction?.toLowerCase().includes('retry');
+
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>← Back</Text></Pressable>
         <Text style={styles.state}>{stateLabels[item.state]}</Text>
         <Text style={styles.saved}>Saved to Carry</Text>
@@ -60,7 +99,61 @@ export default function CaseScreen() {
         <View style={styles.block}>
           <Text style={styles.blockTitle}>Now</Text>
           <Text style={styles.nowText}>{item.nextAction}</Text>
+
+          {item.state === 'needs_user' ? (
+            <View style={styles.responseCard}>
+              {item.decisionLabel && item.decisionLabel !== item.nextAction ? <Text style={styles.responsePrompt}>{item.decisionLabel}</Text> : null}
+              <TextInput
+                value={responseText}
+                onChangeText={setResponseText}
+                placeholder="Tell Carry what it needs to know"
+                placeholderTextColor={colours.muted}
+                multiline
+                editable={!working}
+                style={styles.responseInput}
+              />
+              <Pressable
+                disabled={!responseText.trim() || working}
+                onPress={submitResponse}
+                style={[styles.actionButton, (!responseText.trim() || working) && styles.disabledButton]}
+              >
+                {working ? <ActivityIndicator color={colours.white} /> : <Text style={styles.actionButtonText}>Continue with this</Text>}
+              </Pressable>
+            </View>
+          ) : null}
+
+          {canRetry ? (
+            <Pressable disabled={working} onPress={retryCase} style={[styles.actionButton, working && styles.disabledButton]}>
+              {working ? <ActivityIndicator color={colours.white} /> : <Text style={styles.actionButtonText}>Try again</Text>}
+            </Pressable>
+          ) : null}
+
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
         </View>
+
+        {item.evidence.length > 0 ? (
+          <View style={styles.block}>
+            <Text style={styles.blockTitle}>What Carry found</Text>
+            <View style={styles.evidenceList}>
+              {item.evidence.map((evidence) => (
+                <View key={evidence.id} style={styles.evidenceCard}>
+                  <Text style={styles.evidenceTitle}>{evidence.title}</Text>
+                  <Text style={styles.evidenceBody}>{evidence.body}</Text>
+                  {evidence.sources.length > 0 ? (
+                    <View style={styles.sources}>
+                      <Text style={styles.sourceHeading}>Sources</Text>
+                      {evidence.sources.map((source) => (
+                        <Pressable key={source.url} onPress={() => Linking.openURL(source.url)}>
+                          <Text numberOfLines={2} style={styles.sourceLink}>↗ {source.title ?? source.url}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
 
         <View style={styles.block}>
           <Text style={styles.blockTitle}>Plan</Text>
@@ -105,6 +198,11 @@ const styles = StyleSheet.create({
   title: { color: colours.ink, fontSize: 38, lineHeight: 42, fontWeight: '700', letterSpacing: -1.5, marginTop: spacing.xs },
   outcome: { color: colours.secondaryInk, fontSize: 19, lineHeight: 28, marginTop: spacing.sm },
   block: { marginTop: spacing.xl, borderTopWidth: 1, borderTopColor: colours.line, paddingTop: spacing.lg }, blockTitle: { color: colours.ink, fontSize: 17, fontWeight: '700', marginBottom: spacing.md }, nowText: { color: colours.secondaryInk, fontSize: 17, lineHeight: 25 },
+  responseCard: { marginTop: spacing.lg, gap: spacing.sm }, responsePrompt: { color: colours.ink, fontSize: 15, lineHeight: 22, fontWeight: '600' },
+  responseInput: { minHeight: 92, borderWidth: 1, borderColor: colours.line, borderRadius: radius.card, padding: spacing.md, color: colours.ink, backgroundColor: colours.white, fontSize: 16, lineHeight: 22, textAlignVertical: 'top' },
+  actionButton: { marginTop: spacing.xs, backgroundColor: colours.ink, borderRadius: radius.pill, minHeight: 52, paddingHorizontal: spacing.lg, alignItems: 'center', justifyContent: 'center' }, disabledButton: { opacity: 0.45 }, actionButtonText: { color: colours.white, fontWeight: '700', fontSize: 15 }, errorText: { color: colours.rust, marginTop: spacing.sm, fontSize: 14, lineHeight: 20 },
+  evidenceList: { gap: spacing.md }, evidenceCard: { borderWidth: 1, borderColor: colours.line, borderRadius: radius.card, padding: spacing.md, backgroundColor: colours.white }, evidenceTitle: { color: colours.ink, fontSize: 16, fontWeight: '700' }, evidenceBody: { color: colours.secondaryInk, fontSize: 15, lineHeight: 22, marginTop: spacing.sm },
+  sources: { marginTop: spacing.md, gap: spacing.xs }, sourceHeading: { color: colours.muted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8 }, sourceLink: { color: colours.rust, fontSize: 13, lineHeight: 18 },
   plan: { gap: spacing.md }, planRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }, stepMark: { color: colours.muted, width: 20, fontSize: 15 }, activeMark: { color: colours.rust }, stepText: { flex: 1, color: colours.ink, fontSize: 15, lineHeight: 22 }, doneText: { color: colours.muted },
   activity: { gap: spacing.md }, activityRow: { flexDirection: 'row', gap: spacing.md }, activityTime: { color: colours.muted, fontSize: 12, width: 42, paddingTop: 2 }, activityCopy: { flex: 1 }, activityActor: { color: colours.ink, fontSize: 13, fontWeight: '700' }, activityText: { color: colours.secondaryInk, fontSize: 14, lineHeight: 20, marginTop: 2 },
   tellButton: { marginTop: spacing.xl, backgroundColor: colours.ink, borderRadius: radius.pill, paddingVertical: 15, alignItems: 'center' }, tellButtonText: { color: colours.white, fontWeight: '700', fontSize: 15 },
