@@ -37,6 +37,8 @@ Carry should:
 
 - infer the likely service type and safe scope;
 - identify the minimum missing fact only when genuinely required (usually location/postcode);
+- when location is the missing fact, let the mobile app use foreground device location with permission, accept a dropped pin, or fall back to postcode/place text;
+- ask for a search radius only when a nearby search genuinely needs one;
 - research suitable providers when location is available;
 - create a concise shortlist with evidence, not invented ratings or availability;
 - prepare the useful next step, such as an enquiry/booking brief;
@@ -79,6 +81,8 @@ Use a web-search-capable model/tool for current research. Store useful evidence 
 
 Add an endpoint that records a user's decision or missing fact and resumes the case runner. Test this through the API before adding mobile controls.
 
+Location hand-backs should be structured rather than flattened into a postcode string when the app has coordinates. Persist the selected source (`device` or `pin`), coordinates, optional human-readable place, accuracy and radius alongside any extra user detail. Text remains a first-class fallback.
+
 ### E. Only then update the mobile surface
 
 The next APK needs only the controls the proven backend contract requires:
@@ -86,7 +90,13 @@ The next APK needs only the controls the proven backend contract requires:
 - show evidence/results rather than generic `Carry is working it out` copy;
 - show one decision/approval card when `needs_user`;
 - submit the decision and refresh/resume;
+- for location-specific hand-backs only, offer **Use my location**, **Drop a pin**, and postcode/town/address text fallback;
+- request foreground location only when the user taps the location control; no background location permission;
+- show a radius control only when the case metadata says distance matters;
+- keep an optional extra-details field so a location request can still collect access/building/timing information in the same hand-back;
 - never render a button unless it is wired to a real API action.
+
+The drop-pin control deliberately uses an OpenStreetMap/Leaflet web map in the alpha rather than adding a Google Maps API-key dependency. If the map cannot load, the text location fallback remains available.
 
 ## Working-alpha gate
 
@@ -95,6 +105,10 @@ Do not build the next Android alpha until all of these pass:
 - [ ] 10 consecutive text captures are understood without fallback or runtime errors;
 - [ ] voice capture transcribes and follows the same path;
 - [ ] the production smoke command passes against Vercel;
+- [ ] household-service case requests a structured location hand-back when location is genuinely missing;
+- [ ] structured device/pin location plus radius reaches the runner and grounds local provider research;
+- [ ] denied/unavailable foreground location still leaves pin and postcode/place fallbacks usable;
+- [ ] non-location hand-backs do not render location or radius controls;
 - [ ] household-service case with a supplied location reaches a researched shortlist or a precise hand-back;
 - [ ] purchase case produces a researched comparison and recommendation;
 - [ ] decision API records a choice/fact and resumes the case;
