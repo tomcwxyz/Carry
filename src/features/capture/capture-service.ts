@@ -6,6 +6,7 @@ export type CaptureInput =
 
 export interface CaptureResult {
   caseId: string;
+  degraded?: boolean;
 }
 
 export async function submitCapture(input: CaptureInput): Promise<CaptureResult> {
