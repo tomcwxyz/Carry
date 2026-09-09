@@ -5,12 +5,23 @@ import { getSql } from './db.js';
 import { createOpenAIResponse, getOpenAIOutputText } from './openai-response.js';
 import { researchWeb, type ResearchResult } from './research-worker.js';
 
+const stepStateSchema = z.enum(['done', 'active', 'todo']);
+const rawStepSchema = z.object({ label: z.string(), state: stepStateSchema });
 const stepSchema = z.object({
   label: z.string().min(3).max(140),
-  state: z.enum(['done', 'active', 'todo']),
+  state: stepStateSchema,
 });
 
 type PlanStep = z.infer<typeof stepSchema>;
+
+const rawNextStepSchema = z.object({
+  kind: z.enum(['needs_user', 'research', 'progress', 'waiting', 'done']),
+  summary: z.string(),
+  nextAction: z.string(),
+  decisionLabel: z.string().nullable(),
+  researchQuery: z.string().nullable(),
+  plan: z.array(rawStepSchema).min(2),
+});
 
 const nextStepSchema = z.object({
   kind: z.enum(['needs_user', 'research', 'progress', 'waiting', 'done']),
@@ -19,6 +30,16 @@ const nextStepSchema = z.object({
   decisionLabel: z.string().max(140).nullable(),
   researchQuery: z.string().max(500).nullable(),
   plan: z.array(stepSchema).min(2).max(6),
+});
+
+const rawResearchSynthesisSchema = z.object({
+  kind: z.enum(['needs_user', 'progress', 'waiting', 'done']),
+  summary: z.string(),
+  nextAction: z.string(),
+  decisionLabel: z.string().nullable(),
+  resultTitle: z.string(),
+  resultBody: z.string(),
+  plan: z.array(rawStepSchema).min(2),
 });
 
 const researchSynthesisSchema = z.object({
@@ -73,7 +94,6 @@ const researchSynthesisJsonSchema = {
 
 type NextStep = z.infer<typeof nextStepSchema>;
 type ResearchSynthesis = z.infer<typeof researchSynthesisSchema>;
-
 type AppliedKind = Exclude<NextStep['kind'], 'research'>;
 
 export type CarryRunResult =
@@ -105,7 +125,45 @@ Use waiting only for a real external condition already in motion. Use done only 
 Never claim that Carry booked, bought, sent, called or otherwise acted externally unless the case events contain evidence that action happened.
 For household services, once location/building details are available, research providers rather than asking the user to do the research.
 For purchases, once requirements are adequate, research options rather than asking the user to browse.
-Keep the plan small, ordered and honest. Unless the case is done, exactly one plan step should be active. Earlier completed steps should be done and later steps should be todo.`;
+Keep every field terse. Keep the plan small, ordered and honest. Unless the case is done, exactly one plan step should be active. Earlier completed steps should be done and later steps should be todo.`;
+
+function clip(value: string, max: number) {
+  const trimmed = value.trim();
+  if (trimmed.length <= max) return trimmed;
+  return `${trimmed.slice(0, Math.max(1, max - 1)).trimEnd()}…`;
+}
+
+function normaliseRawPlan(plan: Array<z.infer<typeof rawStepSchema>>): PlanStep[] {
+  return plan.slice(0, 6).map((step) => ({
+    label: clip(step.label, 140),
+    state: step.state,
+  }));
+}
+
+function normaliseNextStep(value: unknown): NextStep {
+  const raw = rawNextStepSchema.parse(value);
+  return nextStepSchema.parse({
+    kind: raw.kind,
+    summary: clip(raw.summary, 220),
+    nextAction: clip(raw.nextAction, 260),
+    decisionLabel: raw.decisionLabel ? clip(raw.decisionLabel, 140) : null,
+    researchQuery: raw.researchQuery ? clip(raw.researchQuery, 500) : null,
+    plan: normaliseRawPlan(raw.plan),
+  });
+}
+
+function normaliseResearchSynthesis(value: unknown): ResearchSynthesis {
+  const raw = rawResearchSynthesisSchema.parse(value);
+  return researchSynthesisSchema.parse({
+    kind: raw.kind,
+    summary: clip(raw.summary, 220),
+    nextAction: clip(raw.nextAction, 260),
+    decisionLabel: raw.decisionLabel ? clip(raw.decisionLabel, 140) : null,
+    resultTitle: clip(raw.resultTitle, 100),
+    resultBody: clip(raw.resultBody, 1800),
+    plan: normaliseRawPlan(raw.plan),
+  });
+}
 
 function normalisePlan(plan: PlanStep[], kind: AppliedKind): PlanStep[] {
   const copy = plan.map((step) => ({ ...step }));
@@ -162,7 +220,7 @@ async function chooseNextStep(snapshot: CaseSnapshot): Promise<NextStep> {
     model: getCaseModel(),
     instructions: RUNNER_SYSTEM,
     input: snapshotText(snapshot),
-    max_output_tokens: 1000,
+    max_output_tokens: 1800,
     text: {
       format: {
         type: 'json_schema',
@@ -175,7 +233,7 @@ async function chooseNextStep(snapshot: CaseSnapshot): Promise<NextStep> {
 
   const text = getOpenAIOutputText(data);
   if (!text) throw new Error('Carry runner returned no structured next step');
-  return nextStepSchema.parse(JSON.parse(text));
+  return normaliseNextStep(JSON.parse(text));
 }
 
 async function synthesiseResearch(snapshot: CaseSnapshot, research: ResearchResult): Promise<ResearchSynthesis> {
@@ -188,10 +246,10 @@ Respect the user's stated location and exclude evidence for same-named places in
 For a shortlist or recommendation, make the useful comparison now, then ask for one concrete choice only if the next consequential action requires approval.
 Do not invent ratings, prices, availability, contact details or actions. Distinguish indicative local price guides from provider-specific prices.
 Never claim an external booking, purchase, message or call occurred.
-Keep resultBody concise enough for a mobile screen and explain why the options are useful.
+Keep every field concise and resultBody suitable for one mobile card.
 Unless the case is done, return exactly one active plan step.`,
     input: `CASE\n${snapshotText(snapshot)}\n\nRESEARCH\n${research.text}\n\nSOURCES\n${sourceList || 'No source URLs were returned.'}`,
-    max_output_tokens: 1500,
+    max_output_tokens: 2600,
     text: {
       format: {
         type: 'json_schema',
@@ -204,7 +262,7 @@ Unless the case is done, return exactly one active plan step.`,
 
   const text = getOpenAIOutputText(data);
   if (!text) throw new Error('Carry research synthesis returned no structured output');
-  return researchSynthesisSchema.parse(JSON.parse(text));
+  return normaliseResearchSynthesis(JSON.parse(text));
 }
 
 async function loadSnapshot(caseId: string, ownerKey: string): Promise<CaseSnapshot | null> {
