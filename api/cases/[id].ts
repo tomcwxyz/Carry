@@ -12,6 +12,57 @@ function normaliseSources(value: unknown) {
   });
 }
 
+function normaliseContacts(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  const validKinds = new Set(['phone', 'email', 'website', 'contact_form']);
+  return value.flatMap((contact) => {
+    if (!contact || typeof contact !== 'object') return [];
+    const item = contact as Record<string, unknown>;
+    const kind = String(item.kind ?? '').trim();
+    const label = String(item.label ?? '').trim();
+    const contactValue = String(item.value ?? '').trim();
+    const sourceUrl = String(item.sourceUrl ?? '').trim();
+    if (!validKinds.has(kind) || !contactValue || !sourceUrl) return [];
+    return [{ kind, label: label || kind, value: contactValue, sourceUrl }];
+  }).slice(0, 5);
+}
+
+function normaliseOptions(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((option) => {
+    if (!option || typeof option !== 'object') return [];
+    const item = option as Record<string, unknown>;
+    const name = String(item.name ?? '').trim();
+    const summary = String(item.summary ?? '').trim();
+    if (!name || !summary) return [];
+    const reason = typeof item.reason === 'string' && item.reason.trim() ? item.reason.trim() : null;
+    const location = typeof item.location === 'string' && item.location.trim() ? item.location.trim() : null;
+    return [{
+      name,
+      summary,
+      reason,
+      recommended: item.recommended === true,
+      location,
+      contacts: normaliseContacts(item.contacts),
+    }];
+  }).slice(0, 3);
+}
+
+function normalisePreparedAction(value: unknown) {
+  if (!value || typeof value !== 'object') return null;
+  const action = value as Record<string, unknown>;
+  const label = String(action.label ?? '').trim();
+  const body = String(action.body ?? '').trim();
+  if (!label || !body) return null;
+  const subject = typeof action.subject === 'string' && action.subject.trim() ? action.subject.trim() : null;
+  return { label, subject, body };
+}
+
+function resultKindFrom(value: unknown, options: ReturnType<typeof normaliseOptions>) {
+  if (value === 'summary' || value === 'shortlist' || value === 'comparison' || value === 'answer') return value;
+  return options.length > 0 ? 'shortlist' : 'summary';
+}
+
 function decisionInputFrom(value: unknown, nextAction: unknown, domain: unknown) {
   if (!value || typeof value !== 'object') return undefined;
   const decision = value as Record<string, unknown>;
@@ -59,10 +110,14 @@ export async function GET(request: Request) {
   const evidence = events.flatMap((event) => {
     const payload = event.payload && typeof event.payload === 'object' ? event.payload as Record<string, unknown> : {};
     if (event.type !== 'action_completed' || typeof payload.body !== 'string' || !payload.body.trim()) return [];
+    const options = normaliseOptions(payload.options);
     return [{
       id: event.id,
+      kind: resultKindFrom(payload.resultKind, options),
       title: event.label,
       body: payload.body.trim(),
+      options,
+      preparedAction: normalisePreparedAction(payload.preparedAction),
       sources: normaliseSources(payload.sources),
     }];
   });
