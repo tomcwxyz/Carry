@@ -1,10 +1,12 @@
 # Carry — roadmap
 
-## Current focus — Android Alpha #4: prove that Carry carries
+## Current focus — Android Alpha #4: turn research into action
 
 The working-alpha backend gate has passed: 10/10 consecutive production text captures, the real multipart voice path, grounded household/purchase/admin recipes and CI are green. Android Alpha #4 packages the first version intended to materially advance a case rather than simply capture and persist it.
 
-The immediate priority is now **on-device usability and outcome testing**, not adding more connectors. We need to prove that a user can hand Carry something real, have Carry do useful bounded work, and only be interrupted when a fact, decision or consequential approval is genuinely required.
+Two real on-device service/repair tests now prove that Carry can understand the problem, use location, research relevant options and make a reasoned recommendation. They also exposed the next product boundary: a useful shortlist still feels like homework when contact routes, prepared enquiry text and the immediate next action are buried or absent.
+
+The immediate priority is therefore **actionable results**: Carry should turn research into a small recommendation set with verified contact routes, prepare the next enquiry/call brief itself, and stop only at the genuine human or consequential boundary. Do not add more connectors until this interaction feels good.
 
 Roadmap alpha numbers describe capability stages; GitHub/Android build numbers are build artefacts.
 
@@ -54,8 +56,15 @@ Roadmap alpha numbers describe capability stages; GitHub/Android build numbers a
 
 ### Alpha 2 usability/reliability pass — current
 
-- [ ] test Android Alpha #4 end-to-end on a real device
-- [ ] gutter case: location → grounded shortlist → useful booking/enquiry hand-back
+- [x] test Android Alpha #4 end-to-end on a real device with multiple real cases
+- [x] prove location → grounded local shortlist on the gutter case
+- [x] prove a second service/repair domain with van bodywork research
+- [ ] return no more than three strong options rather than a directory-style result
+- [ ] collect evidence-backed phone/email/contact-form/website routes for shortlisted providers
+- [ ] make the best-fit recommendation visually obvious
+- [ ] prepare the next enquiry, quote request or call brief without asking the user to restate case facts
+- [ ] collapse raw sources behind an evidence disclosure rather than filling the primary result card
+- [ ] gutter case: recommendation → usable contact route → useful booking/enquiry hand-back
 - [ ] gutter case with location permission denied → pin/postcode fallback still works
 - [ ] purchase case → comparison → recommendation → clear remaining decision
 - [ ] general admin/web case → evidence → next useful action
@@ -63,7 +72,6 @@ Roadmap alpha numbers describe capability stages; GitHub/Android build numbers a
 - [ ] deliberately exercise failure + retry on-device
 - [ ] tighten Working / Waiting / Needs you / Done language and visual hierarchy
 - [ ] reduce unnecessary human touches and generic progress copy
-- [ ] make evidence/results quickly scannable on mobile
 - [ ] add optimistic UI where it materially improves perceived responsiveness
 
 ### Still required before Alpha 2 is genuinely complete
@@ -76,7 +84,7 @@ Roadmap alpha numbers describe capability stages; GitHub/Android build numbers a
 
 Golden paths:
 
-- gutter problem → research local options → concise booking/enquiry decision
+- gutter problem → research local options → concise recommendation → verified contact route → booking/enquiry boundary
 - MOT → determine due state → shortlist/book with approval
 - purchase → requirements → shortlist → recommendation
 
