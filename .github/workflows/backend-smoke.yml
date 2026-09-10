@@ -26,6 +26,7 @@ jobs:
             domain: household
             response: Two-storey house, normal access from the front and rear. Water is not entering the house.
             expect_location: 'true'
+            require_actionable: 'true'
             location: '{"source":"device","latitude":55.0,"longitude":-1.61,"accuracyMetres":80,"label":"NE3 5HN · Newcastle upon Tyne · United Kingdom","radiusMiles":10}'
             forbid_source: guttervac.com.au
           - recipe: purchase
@@ -33,6 +34,7 @@ jobs:
             domain: purchase
             response: No other constraints. Compare current UK options and recommend the best fit.
             expect_location: 'false'
+            require_actionable: 'false'
             location: ''
             forbid_source: ''
           - recipe: admin
@@ -40,6 +42,7 @@ jobs:
             domain: admin
             response: This is a standard UK car driving licence and there are no medical changes to report.
             expect_location: 'false'
+            require_actionable: 'false'
             location: ''
             forbid_source: ''
     steps:
@@ -53,8 +56,9 @@ jobs:
           CARRY_EXPECT_DOMAIN: ${{ matrix.domain }}
           CARRY_SMOKE_RESPONSE: ${{ matrix.response }}
           CARRY_EXPECT_LOCATION_HAND_BACK: ${{ matrix.expect_location }}
-          CARRY_SMOKE_LOCATION: ${{ matrix.location }}
           CARRY_REQUIRE_EVIDENCE: 'true'
+          CARRY_REQUIRE_ACTIONABLE: ${{ matrix.require_actionable }}
+          CARRY_SMOKE_LOCATION: ${{ matrix.location }}
           CARRY_FORBID_SOURCE_PATTERN: ${{ matrix.forbid_source }}
         run: |
           sleep 35

@@ -4,6 +4,7 @@ const prompt = process.argv.slice(2).join(' ').trim() || 'My gutter is blocked';
 const responseText = process.env.CARRY_SMOKE_RESPONSE || 'Two-storey house, normal access from the front and rear. Water is not entering the house.';
 const expectedDomain = process.env.CARRY_EXPECT_DOMAIN?.trim();
 const requireEvidence = process.env.CARRY_REQUIRE_EVIDENCE !== 'false';
+const requireActionable = process.env.CARRY_REQUIRE_ACTIONABLE === 'true';
 const forbiddenSourcePattern = process.env.CARRY_FORBID_SOURCE_PATTERN?.trim();
 const expectLocationHandback = process.env.CARRY_EXPECT_LOCATION_HAND_BACK === 'true';
 const smokeLocation = process.env.CARRY_SMOKE_LOCATION ? JSON.parse(process.env.CARRY_SMOKE_LOCATION) : undefined;
@@ -48,6 +49,26 @@ function validateEvidence(item) {
   if (forbiddenSourcePattern) {
     assert(!sourceUrls.some((url) => String(url).includes(forbiddenSourcePattern)), `Research included forbidden/irrelevant source pattern: ${forbiddenSourcePattern}`);
   }
+}
+
+function actionableEvidence(item) {
+  if (!Array.isArray(item.evidence)) return undefined;
+  return [...item.evidence].reverse().find((entry) => {
+    const hasPreparedAction = Boolean(entry?.preparedAction?.body);
+    const hasContact = Array.isArray(entry?.options) && entry.options.some((option) => Array.isArray(option.contacts) && option.contacts.length > 0);
+    return hasPreparedAction || hasContact;
+  });
+}
+
+function validateActionable(item) {
+  if (!requireActionable) return;
+  const evidence = actionableEvidence(item);
+  assert(evidence, 'Case did not produce an actionable result');
+  assert(Array.isArray(evidence.options) && evidence.options.length > 0 && evidence.options.length <= 3, `Expected 1-3 actionable options, got ${evidence.options?.length ?? 0}`);
+  const recommended = evidence.options.find((option) => option.recommended === true);
+  assert(recommended, 'Actionable shortlist has no recommended option');
+  assert(Array.isArray(recommended.contacts) && recommended.contacts.length > 0, 'Recommended option has no evidence-backed contact route');
+  assert(typeof evidence.preparedAction?.body === 'string' && evidence.preparedAction.body.trim().length > 3, 'Actionable shortlist has no prepared enquiry/call brief');
 }
 
 async function respond(caseId, item) {
@@ -100,6 +121,9 @@ async function main() {
 
   let sawLocationHandback = false;
   for (let handback = 0; handback < 3 && item.state === 'needs_user'; handback += 1) {
+    // An actionable result is the legitimate human/consequence boundary. The smoke must
+    // not pretend to call, email or book by replying with unrelated fixture text.
+    if (actionableEvidence(item)) break;
     const usedLocation = await respond(capture.caseId, item);
     sawLocationHandback ||= usedLocation;
     item = await getCase(capture.caseId);
@@ -113,6 +137,7 @@ async function main() {
   assert(typeof item.nextAction === 'string' && item.nextAction.length > 3, 'Advanced case has no useful next action');
   validatePlan(item);
   validateEvidence(item);
+  validateActionable(item);
 
   console.log('\nPASS');
   console.log(JSON.stringify({
