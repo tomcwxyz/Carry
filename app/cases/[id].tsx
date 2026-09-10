@@ -1,8 +1,9 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ActionableResultCard } from '../../src/features/cases/ActionableResultCard';
 import { continueCase, fetchCase, respondToCase } from '../../src/features/cases/case-service';
 import type { CarryCase, CarryCaseResponse } from '../../src/features/cases/types';
 import { LocationDecisionInput } from '../../src/features/location/LocationDecisionInput';
@@ -10,7 +11,7 @@ import { colours, radius, spacing } from '../../src/theme/tokens';
 
 const stateLabels = {
   needs_user: 'NEEDS YOU',
-  carrying: 'CARRYING',
+  carrying: 'WORKING',
   waiting: 'WAITING',
   done: 'DONE',
 } as const;
@@ -90,6 +91,32 @@ export default function CaseScreen() {
   const canRetry = item.state === 'carrying' && item.nextAction?.toLowerCase().includes('retry');
   const evidenceItems = item.evidence ?? [];
   const decisionInput = item.decisionInput ?? { kind: 'text' as const, askRadius: false };
+  const actionableEvidence = evidenceItems.find((evidence) =>
+    Boolean(evidence.preparedAction) || evidence.options.some((option) => option.contacts.length > 0),
+  );
+  const hasActionableHandback = item.state === 'needs_user' && Boolean(actionableEvidence);
+  const hasRecommendation = evidenceItems.some((evidence) => evidence.options.some((option) => option.recommended));
+
+  const responseControls = (
+    <>
+      <TextInput
+        value={responseText}
+        onChangeText={setResponseText}
+        placeholder="Tell Carry what happened"
+        placeholderTextColor={colours.muted}
+        multiline
+        editable={!working}
+        style={styles.responseInput}
+      />
+      <Pressable
+        disabled={!responseText.trim() || working}
+        onPress={() => { void submitResponse(responseText.trim()); }}
+        style={[styles.actionButton, (!responseText.trim() || working) && styles.disabledButton]}
+      >
+        {working ? <ActivityIndicator color={colours.white} /> : <Text style={styles.actionButtonText}>Update Carry</Text>}
+      </Pressable>
+    </>
+  );
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -104,7 +131,7 @@ export default function CaseScreen() {
           <Text style={styles.blockTitle}>Now</Text>
           <Text style={styles.nowText}>{item.nextAction}</Text>
 
-          {item.state === 'needs_user' ? (
+          {item.state === 'needs_user' && !hasActionableHandback ? (
             <View style={styles.responseCard}>
               {item.decisionLabel && item.decisionLabel !== item.nextAction ? <Text style={styles.responsePrompt}>{item.decisionLabel}</Text> : null}
               {decisionInput.kind === 'location' ? (
@@ -113,26 +140,7 @@ export default function CaseScreen() {
                   disabled={working}
                   onSubmit={(response) => { void submitResponse(response); }}
                 />
-              ) : (
-                <>
-                  <TextInput
-                    value={responseText}
-                    onChangeText={setResponseText}
-                    placeholder="Tell Carry what it needs to know"
-                    placeholderTextColor={colours.muted}
-                    multiline
-                    editable={!working}
-                    style={styles.responseInput}
-                  />
-                  <Pressable
-                    disabled={!responseText.trim() || working}
-                    onPress={() => { void submitResponse(responseText.trim()); }}
-                    style={[styles.actionButton, (!responseText.trim() || working) && styles.disabledButton]}
-                  >
-                    {working ? <ActivityIndicator color={colours.white} /> : <Text style={styles.actionButtonText}>Continue with this</Text>}
-                  </Pressable>
-                </>
-              )}
+              ) : responseControls}
             </View>
           ) : null}
 
@@ -147,25 +155,18 @@ export default function CaseScreen() {
 
         {evidenceItems.length > 0 ? (
           <View style={styles.block}>
-            <Text style={styles.blockTitle}>What Carry found</Text>
+            <Text style={styles.blockTitle}>{hasRecommendation ? 'Carry recommends' : 'What Carry found'}</Text>
             <View style={styles.evidenceList}>
-              {evidenceItems.map((evidence) => (
-                <View key={evidence.id} style={styles.evidenceCard}>
-                  <Text style={styles.evidenceTitle}>{evidence.title}</Text>
-                  <Text style={styles.evidenceBody}>{evidence.body}</Text>
-                  {evidence.sources.length > 0 ? (
-                    <View style={styles.sources}>
-                      <Text style={styles.sourceHeading}>Sources</Text>
-                      {evidence.sources.map((source) => (
-                        <Pressable key={source.url} onPress={() => Linking.openURL(source.url)}>
-                          <Text numberOfLines={2} style={styles.sourceLink}>↗ {source.title ?? source.url}</Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  ) : null}
-                </View>
-              ))}
+              {evidenceItems.map((evidence) => <ActionableResultCard key={evidence.id} evidence={evidence} />)}
             </View>
+          </View>
+        ) : null}
+
+        {hasActionableHandback ? (
+          <View style={styles.block}>
+            <Text style={styles.blockTitle}>After you act</Text>
+            <Text style={styles.helperText}>Call, email or use the contact route above. Then tell Carry what happened and it can keep carrying this.</Text>
+            <View style={styles.responseCard}>{responseControls}</View>
           </View>
         ) : null}
 
@@ -209,14 +210,18 @@ const styles = StyleSheet.create({
   link: { color: colours.rust, fontWeight: '700' }, muted: { color: colours.muted, textAlign: 'center' },
   state: { color: colours.moss, fontSize: 12, fontWeight: '800', letterSpacing: 1.4, marginTop: spacing.lg },
   saved: { color: colours.muted, fontSize: 12, marginTop: spacing.xs },
-  title: { color: colours.ink, fontSize: 38, lineHeight: 42, fontWeight: '700', letterSpacing: -1.5, marginTop: spacing.xs },
-  outcome: { color: colours.secondaryInk, fontSize: 19, lineHeight: 28, marginTop: spacing.sm },
-  block: { marginTop: spacing.xl, borderTopWidth: 1, borderTopColor: colours.line, paddingTop: spacing.lg }, blockTitle: { color: colours.ink, fontSize: 17, fontWeight: '700', marginBottom: spacing.md }, nowText: { color: colours.secondaryInk, fontSize: 17, lineHeight: 25 },
+  title: { color: colours.ink, fontSize: 34, lineHeight: 38, fontWeight: '700', letterSpacing: -1.2, marginTop: spacing.xs },
+  outcome: { color: colours.secondaryInk, fontSize: 18, lineHeight: 26, marginTop: spacing.sm },
+  block: { marginTop: spacing.xl, borderTopWidth: 1, borderTopColor: colours.line, paddingTop: spacing.lg },
+  blockTitle: { color: colours.ink, fontSize: 20, lineHeight: 25, fontWeight: '700', marginBottom: spacing.md, letterSpacing: -0.2 },
+  nowText: { color: colours.ink, fontSize: 17, lineHeight: 25 },
+  helperText: { color: colours.secondaryInk, fontSize: 15, lineHeight: 22 },
   responseCard: { marginTop: spacing.lg, gap: spacing.sm }, responsePrompt: { color: colours.ink, fontSize: 15, lineHeight: 22, fontWeight: '600' },
-  responseInput: { minHeight: 92, borderWidth: 1, borderColor: colours.line, borderRadius: radius.lg, padding: spacing.md, color: colours.ink, backgroundColor: colours.white, fontSize: 16, lineHeight: 22, textAlignVertical: 'top' },
-  actionButton: { marginTop: spacing.xs, backgroundColor: colours.ink, borderRadius: radius.pill, minHeight: 52, paddingHorizontal: spacing.lg, alignItems: 'center', justifyContent: 'center' }, disabledButton: { opacity: 0.45 }, actionButtonText: { color: colours.white, fontWeight: '700', fontSize: 15 }, errorText: { color: colours.rust, marginTop: spacing.sm, fontSize: 14, lineHeight: 20 },
-  evidenceList: { gap: spacing.md }, evidenceCard: { borderWidth: 1, borderColor: colours.line, borderRadius: radius.lg, padding: spacing.md, backgroundColor: colours.white }, evidenceTitle: { color: colours.ink, fontSize: 16, fontWeight: '700' }, evidenceBody: { color: colours.secondaryInk, fontSize: 15, lineHeight: 22, marginTop: spacing.sm },
-  sources: { marginTop: spacing.md, gap: spacing.xs }, sourceHeading: { color: colours.muted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8 }, sourceLink: { color: colours.rust, fontSize: 13, lineHeight: 18 },
+  responseInput: { minHeight: 82, borderWidth: 1, borderColor: colours.line, borderRadius: radius.lg, padding: spacing.md, color: colours.ink, backgroundColor: colours.white, fontSize: 16, lineHeight: 22, textAlignVertical: 'top' },
+  actionButton: { marginTop: spacing.xs, backgroundColor: colours.ink, borderRadius: radius.pill, minHeight: 52, paddingHorizontal: spacing.lg, alignItems: 'center', justifyContent: 'center' },
+  disabledButton: { opacity: 0.45 }, actionButtonText: { color: colours.white, fontWeight: '700', fontSize: 15 },
+  errorText: { color: colours.rust, marginTop: spacing.sm, fontSize: 14, lineHeight: 20 },
+  evidenceList: { gap: spacing.md },
   plan: { gap: spacing.md }, planRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }, stepMark: { color: colours.muted, width: 20, fontSize: 15 }, activeMark: { color: colours.rust }, stepText: { flex: 1, color: colours.ink, fontSize: 15, lineHeight: 22 }, doneText: { color: colours.muted },
   activity: { gap: spacing.md }, activityRow: { flexDirection: 'row', gap: spacing.md }, activityTime: { color: colours.muted, fontSize: 12, width: 42, paddingTop: 2 }, activityCopy: { flex: 1 }, activityActor: { color: colours.ink, fontSize: 13, fontWeight: '700' }, activityText: { color: colours.secondaryInk, fontSize: 14, lineHeight: 20, marginTop: 2 },
   tellButton: { marginTop: spacing.xl, backgroundColor: colours.ink, borderRadius: radius.pill, paddingVertical: 15, alignItems: 'center' }, tellButtonText: { color: colours.white, fontWeight: '700', fontSize: 15 },

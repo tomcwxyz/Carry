@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { normaliseResearchSynthesis, researchSynthesisJsonSchema, type ResearchSynthesis } from './actionable-result.js';
 import { getCaseModel } from './case-understanding.js';
 import { decisionInputJsonSchema, decisionInputSchema, normaliseDecisionInput, type DecisionInput } from './decision-input.js';
 import { getSql } from './db.js';
@@ -35,28 +36,6 @@ const nextStepSchema = z.object({
   plan: z.array(stepSchema).min(2).max(6),
 });
 
-const rawResearchSynthesisSchema = z.object({
-  kind: z.enum(['needs_user', 'progress', 'waiting', 'done']),
-  summary: z.string(),
-  nextAction: z.string(),
-  decisionLabel: z.string().nullable(),
-  decisionInput: decisionInputSchema.nullable(),
-  resultTitle: z.string(),
-  resultBody: z.string(),
-  plan: z.array(rawStepSchema).min(2),
-});
-
-const researchSynthesisSchema = z.object({
-  kind: z.enum(['needs_user', 'progress', 'waiting', 'done']),
-  summary: z.string().min(4).max(220),
-  nextAction: z.string().min(4).max(260),
-  decisionLabel: z.string().max(140).nullable(),
-  decisionInput: decisionInputSchema.nullable(),
-  resultTitle: z.string().min(3).max(100),
-  resultBody: z.string().min(8).max(1800),
-  plan: z.array(stepSchema).min(2).max(6),
-});
-
 const nextStepJsonSchema = {
   type: 'object',
   additionalProperties: false,
@@ -83,24 +62,7 @@ const nextStepJsonSchema = {
   required: ['kind', 'summary', 'nextAction', 'decisionLabel', 'decisionInput', 'researchQuery', 'plan'],
 } as const;
 
-const researchSynthesisJsonSchema = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    kind: { type: 'string', enum: ['needs_user', 'progress', 'waiting', 'done'] },
-    summary: { type: 'string' },
-    nextAction: { type: 'string' },
-    decisionLabel: { anyOf: [{ type: 'string' }, { type: 'null' }] },
-    decisionInput: decisionInputJsonSchema,
-    resultTitle: { type: 'string' },
-    resultBody: { type: 'string' },
-    plan: nextStepJsonSchema.properties.plan,
-  },
-  required: ['kind', 'summary', 'nextAction', 'decisionLabel', 'decisionInput', 'resultTitle', 'resultBody', 'plan'],
-} as const;
-
 type NextStep = z.infer<typeof nextStepSchema>;
-type ResearchSynthesis = z.infer<typeof researchSynthesisSchema>;
 type AppliedKind = Exclude<NextStep['kind'], 'research'>;
 
 export type CarryRunResult =
@@ -125,13 +87,14 @@ type CaseSnapshot = {
 
 const RUNNER_SYSTEM = `You are Carry's bounded case runner. Choose exactly one useful next step.
 Carry is not a to-do list: it should do work itself whenever it safely can.
-Use needs_user only when a specific missing fact or decision genuinely blocks progress.
+Use needs_user only when a specific missing fact, consequential approval or unavoidable human action genuinely blocks progress.
 Use research when current web evidence, local providers, products, public information or live facts would materially advance the case.
 Use progress only for useful work that does not require web research and can be honestly completed from the case context.
 Use waiting only for a real external condition already in motion. Use done only when the outcome is actually verified.
 Never claim that Carry booked, bought, sent, called or otherwise acted externally unless the case events contain evidence that action happened.
-For household services, once location/building details are available, research providers rather than asking the user to do the research.
+For household services and repairs, once location/building details are available, research a small provider shortlist rather than asking the user to do the research. Research should include usable contact routes where evidence supports them.
 For purchases, once requirements are adequate, research options rather than asking the user to browse.
+If a recent action_completed event already contains a grounded shortlist and prepared contact action, do not research the same thing again. Stop at the human/consequential boundary and make the next action precise.
 When kind=needs_user, decisionInput tells the mobile app how to collect the blocking input. Use kind=location only when the user's current/place location is genuinely the missing information. Set askRadius=true only when Carry will search for nearby providers, places or options and the distance matters. For choices, dates, building details or other facts use kind=text. For every other kind, decisionLabel and decisionInput must be null.
 Keep every field terse. Keep the plan small, ordered and honest. Unless the case is done, exactly one plan step should be active. Earlier completed steps should be done and later steps should be todo.`;
 
@@ -162,21 +125,6 @@ function normaliseNextStep(value: unknown): NextStep {
   });
 }
 
-function normaliseResearchSynthesis(value: unknown): ResearchSynthesis {
-  const raw = rawResearchSynthesisSchema.parse(value);
-  const hasHandback = raw.kind === 'needs_user' && Boolean(raw.decisionLabel?.trim());
-  return researchSynthesisSchema.parse({
-    kind: raw.kind,
-    summary: clip(raw.summary, 220),
-    nextAction: clip(raw.nextAction, 260),
-    decisionLabel: hasHandback && raw.decisionLabel ? clip(raw.decisionLabel, 140) : null,
-    decisionInput: normaliseDecisionInput(raw.decisionInput, hasHandback),
-    resultTitle: clip(raw.resultTitle, 100),
-    resultBody: clip(raw.resultBody, 1800),
-    plan: normaliseRawPlan(raw.plan),
-  });
-}
-
 function normalisePlan(plan: PlanStep[], kind: AppliedKind): PlanStep[] {
   const copy = plan.map((step) => ({ ...step }));
   if (kind === 'done') return copy.map((step) => ({ ...step, state: 'done' as const }));
@@ -189,7 +137,6 @@ function normalisePlan(plan: PlanStep[], kind: AppliedKind): PlanStep[] {
       return { ...step, state: index < keep ? 'done' as const : 'todo' as const };
     });
   }
-
   if (activeIndexes.length === 1) return copy;
 
   const firstTodo = copy.findIndex((step) => step.state === 'todo');
@@ -252,22 +199,27 @@ async function synthesiseResearch(snapshot: CaseSnapshot, research: ResearchResu
   const sourceList = research.sources.map((source, index) => `${index + 1}. ${source.title ?? source.url} — ${source.url}`).join('\n');
   const data = await createOpenAIResponse({
     model: getCaseModel(),
-    instructions: `You are Carry. Turn grounded research into the next operational case state.
+    instructions: `You are Carry. Turn grounded research into an actionable operational result, not a research report.
 Only make factual claims supported by the research text and source list supplied below.
 Respect the user's stated location and exclude evidence for same-named places in other countries.
-For a shortlist or recommendation, make the useful comparison now, then ask for one concrete choice only if the next consequential action requires approval.
+For a local-service shortlist, return at most three strong options. Mark at most one as recommended and explain the practical reason it is the best fit.
+For each option, include only evidence-backed contact routes from the research: phone, email, official website or contact form. The contact value must be the actual telephone/email/URL and sourceUrl must identify the evidence source. Never infer a phone number or email from a business name.
+Prefer the provider's own contact route over a directory when both are available. If no verified route was found, return an empty contacts array rather than inventing one.
+For purchase comparisons, use options for the strongest candidates and keep contact arrays empty unless a contact route is genuinely relevant.
+Use resultKind=shortlist for providers/places, comparison for products/options, answer for a bounded factual answer, and summary otherwise.
+Keep resultBody to a short orientation paragraph; put option-specific detail into options rather than repeating it in prose.
+When the case contains enough information to prepare the next enquiry, quote request or call brief, populate preparedAction with a short label, optional subject and ready-to-use body. Preparing text is safe autonomous work: do it without asking permission. preparedAction does not mean anything has been sent.
 Do not invent ratings, prices, availability, contact details or actions. Distinguish indicative local price guides from provider-specific prices.
 Never claim an external booking, purchase, message or call occurred.
-If kind=needs_user, use decisionInput kind=location only if a location is still genuinely missing. A provider/product choice or other approval is kind=text. Set askRadius only when the missing location will be used for a nearby search.
-For non-needs_user results, decisionLabel and decisionInput must be null.
-Keep every field concise and resultBody suitable for one mobile card.
+If the next step is an unavoidable human or consequential external action, use kind=needs_user and make nextAction concrete, e.g. contact the recommended provider using the verified route below. The mobile UI can surface contact buttons, so do not ask the user to search for contact details themselves.
+If kind=needs_user, decisionInput kind=location only if a location is still genuinely missing. Otherwise use kind=text. For non-needs_user results, decisionLabel and decisionInput must be null.
 Unless the case is done, return exactly one active plan step.`,
     input: `CASE\n${snapshotText(snapshot)}\n\nRESEARCH\n${research.text}\n\nSOURCES\n${sourceList || 'No source URLs were returned.'}`,
-    max_output_tokens: 2600,
+    max_output_tokens: 3600,
     text: {
       format: {
         type: 'json_schema',
-        name: 'carry_research_result',
+        name: 'carry_actionable_research_result',
         strict: true,
         schema: researchSynthesisJsonSchema,
       },
@@ -441,7 +393,14 @@ export async function runCase(caseId: string, ownerKey: string): Promise<CarryRu
       INSERT INTO carry_case_events (case_id, type, actor, label, payload)
       VALUES (
         ${caseId}::uuid, 'action_completed', 'carry', ${synthesis.resultTitle},
-        ${JSON.stringify({ kind: synthesis.kind, body: synthesis.resultBody, sources: research.sources })}::jsonb
+        ${JSON.stringify({
+          kind: synthesis.kind,
+          resultKind: synthesis.resultKind,
+          body: synthesis.resultBody,
+          options: synthesis.options,
+          preparedAction: synthesis.preparedAction,
+          sources: research.sources,
+        })}::jsonb
       )
     `;
     return publicResult(synthesis);

@@ -31,10 +31,37 @@ export interface EvidenceSource {
   title?: string;
 }
 
+export type ContactKind = 'phone' | 'email' | 'website' | 'contact_form';
+
+export interface ResultContact {
+  kind: ContactKind;
+  label: string;
+  value: string;
+  sourceUrl: string;
+}
+
+export interface ResultOption {
+  name: string;
+  summary: string;
+  reason?: string | null;
+  recommended: boolean;
+  location?: string | null;
+  contacts: ResultContact[];
+}
+
+export interface PreparedAction {
+  label: string;
+  subject?: string | null;
+  body: string;
+}
+
 export interface CaseEvidence {
   id: string;
+  kind: 'summary' | 'shortlist' | 'comparison' | 'answer';
   title: string;
   body: string;
+  options: ResultOption[];
+  preparedAction?: PreparedAction | null;
   sources: EvidenceSource[];
 }
 
