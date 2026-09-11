@@ -48,7 +48,6 @@ export async function getOwnerLearningSignals(ownerKey: string, excludeCaseId?: 
 
 export function formatLearningSignals(signals: CarryLearningSignal[]) {
   return signals
-    .filter((signal) => signal.note || signal.rating !== 'good')
     .slice(0, 8)
     .map((signal) => {
       const detail = signal.note ? ` — ${signal.note}` : '';
