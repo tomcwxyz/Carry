@@ -1,11 +1,12 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ActionableResultCard } from '../../src/features/cases/ActionableResultCard';
-import { continueCase, fetchCase, respondToCase } from '../../src/features/cases/case-service';
-import type { CarryCase, CarryCaseResponse } from '../../src/features/cases/types';
+import { CaseFeedbackCard } from '../../src/features/cases/CaseFeedbackCard';
+import { completeCase, continueCase, deleteCase, fetchCase, respondToCase, submitCaseFeedback } from '../../src/features/cases/case-service';
+import type { CarryCase, CarryCaseResponse, CaseFeedbackRating } from '../../src/features/cases/types';
 import { LocationDecisionInput } from '../../src/features/location/LocationDecisionInput';
 import { colours, radius, spacing } from '../../src/theme/tokens';
 
@@ -72,6 +73,49 @@ export default function CaseScreen() {
     }
   }
 
+  async function markComplete() {
+    if (!id || working) return;
+    setWorking(true);
+    setError(null);
+    try {
+      await completeCase(id);
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Carry could not mark this complete');
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  function confirmDelete() {
+    if (!id || working) return;
+    Alert.alert(
+      'Delete this case?',
+      'This permanently deletes the case and its Carry history.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            setWorking(true);
+            setError(null);
+            deleteCase(id)
+              .then(() => router.replace('/cases'))
+              .catch((cause) => setError(cause instanceof Error ? cause.message : 'Carry could not delete this case'))
+              .finally(() => setWorking(false));
+          },
+        },
+      ],
+    );
+  }
+
+  async function sendFeedback(rating: CaseFeedbackRating, note?: string) {
+    if (!id) return;
+    await submitCaseFeedback(id, rating, note);
+    await load();
+  }
+
   if (loading) {
     return <SafeAreaView style={styles.safe}><View style={styles.empty}><ActivityIndicator /><Text style={styles.muted}>Carry is loading this case…</Text></View></SafeAreaView>;
   }
@@ -122,6 +166,21 @@ export default function CaseScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>← Back</Text></Pressable>
+
+        <View style={styles.manageRow}>
+          <Pressable disabled={working} onPress={() => router.push(`/cases/${id}/edit`)} style={styles.manageButton}>
+            <Text style={styles.manageText}>Edit</Text>
+          </Pressable>
+          {item.state !== 'done' ? (
+            <Pressable disabled={working} onPress={() => void markComplete()} style={styles.manageButton}>
+              <Text style={styles.manageText}>✓ Complete</Text>
+            </Pressable>
+          ) : null}
+          <Pressable disabled={working} onPress={confirmDelete} style={styles.manageButton}>
+            <Text style={styles.deleteText}>Delete</Text>
+          </Pressable>
+        </View>
+
         <Text style={styles.state}>{stateLabels[item.state]}</Text>
         <Text style={styles.saved}>Saved to Carry</Text>
         <Text style={styles.title}>{item.title}</Text>
@@ -170,6 +229,13 @@ export default function CaseScreen() {
           </View>
         ) : null}
 
+        {item.state === 'done' ? (
+          <View style={styles.block}>
+            <Text style={styles.blockTitle}>Help Carry learn</Text>
+            <CaseFeedbackCard feedback={item.feedback} disabled={working} onSubmit={sendFeedback} />
+          </View>
+        ) : null}
+
         <View style={styles.block}>
           <Text style={styles.blockTitle}>Plan</Text>
           <View style={styles.plan}>
@@ -207,6 +273,10 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colours.paper }, content: { padding: spacing.lg, paddingBottom: spacing.xxl },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: spacing.md, padding: spacing.lg },
   back: { paddingVertical: spacing.sm, alignSelf: 'flex-start' }, backText: { color: colours.secondaryInk, fontSize: 15 },
+  manageRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
+  manageButton: { borderWidth: 1, borderColor: colours.line, backgroundColor: colours.surface, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  manageText: { color: colours.ink, fontSize: 13, fontWeight: '700' },
+  deleteText: { color: colours.rust, fontSize: 13, fontWeight: '700' },
   link: { color: colours.rust, fontWeight: '700' }, muted: { color: colours.muted, textAlign: 'center' },
   state: { color: colours.moss, fontSize: 12, fontWeight: '800', letterSpacing: 1.4, marginTop: spacing.lg },
   saved: { color: colours.muted, fontSize: 12, marginTop: spacing.xs },
