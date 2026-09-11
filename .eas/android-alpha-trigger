@@ -1,2 +1,2 @@
-triggered: 2026-09-10T22:45:00+01:00
-reason: actionable results gate passed; release verified contact routes, prepared enquiries and scannable recommendation UI for device testing
+triggered: 2026-09-11T07:50:00+01:00
+reason: CRUD and explicit feedback gates passed; release edit/resume, completion, deletion and learning-feedback UI for device testing
