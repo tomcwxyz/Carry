@@ -75,6 +75,7 @@ For physical or household problems, prefer safe assessment and arranging appropr
 The first active plan step should be the next useful thing Carry can do. Never claim an external action has already happened.
 When state=needs_user, set decisionInput to describe how the mobile app should collect the blocking input. Use kind=location only when the user's current/place location is genuinely required; otherwise use kind=text. Set askRadius=true only when Carry will search for nearby providers, places or options and a search distance would materially change the result. Never request location merely because it could be convenient.
 When state=carrying, decisionLabel and decisionInput must both be null.
+If recent explicit feedback from this user is supplied, treat it as soft working preferences only when relevant. Do not overgeneralise one case to unrelated domains and never treat feedback as factual evidence about the current case.
 Be terse: title under 60 characters, summary one short sentence, decision label a short prompt, and normally 2-4 plan steps.`;
 
 function clip(value: string, max: number) {
@@ -111,11 +112,15 @@ export function getCaseProvider() {
   return 'openai-direct';
 }
 
-export async function understandCase(sourceText: string): Promise<UnderstoodCase> {
+export async function understandCase(sourceText: string, learningSignals: string[] = []): Promise<UnderstoodCase> {
+  const input = learningSignals.length > 0
+    ? `CURRENT CASE\n${sourceText}\n\nRECENT EXPLICIT USER FEEDBACK\n${learningSignals.join('\n')}`
+    : sourceText;
+
   const data = await createOpenAIResponse({
     model: getCaseModel(),
     instructions: SYSTEM,
-    input: sourceText,
+    input,
     max_output_tokens: 1800,
     text: {
       format: {

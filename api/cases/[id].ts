@@ -1,3 +1,6 @@
+import { advanceCase } from '../../src/server/case-advance.js';
+import { understandCase } from '../../src/server/case-understanding.js';
+import { formatLearningSignals, getOwnerLearningSignals } from '../../src/server/case-learning.js';
 import { getSql } from '../../src/server/db.js';
 
 function normaliseSources(value: unknown) {
@@ -67,13 +70,9 @@ function decisionInputFrom(value: unknown, nextAction: unknown, domain: unknown)
   if (!value || typeof value !== 'object') return undefined;
   const decision = value as Record<string, unknown>;
 
-  if (decision.inputKind === 'location') {
-    return { kind: 'location', askRadius: decision.askRadius === true } as const;
-  }
+  if (decision.inputKind === 'location') return { kind: 'location', askRadius: decision.askRadius === true } as const;
   if (decision.inputKind === 'text') return { kind: 'text', askRadius: false } as const;
 
-  // Cases created before location-aware handbacks only stored a label. Keep those usable
-  // without turning every free-text decision into a location request.
   const copy = `${String(decision.label ?? '')} ${String(nextAction ?? '')}`.toLowerCase();
   const locationSpecific = /\b(postcode|postal code|location|address|town|city|area|where (?:you|the property|it|this))\b/.test(copy);
   if (!locationSpecific) return { kind: 'text', askRadius: false } as const;
@@ -83,21 +82,27 @@ function decisionInputFrom(value: unknown, nextAction: unknown, domain: unknown)
   return { kind: 'location', askRadius: nearbySearch } as const;
 }
 
+function withStepIds(plan: Array<{ label: string; state: 'done' | 'active' | 'todo' }>) {
+  return plan.map((step, index) => ({ ...step, id: `step-${index + 1}` }));
+}
+
+function requestCaseId(request: Request) {
+  return new URL(request.url).pathname.split('/').filter(Boolean).at(-1);
+}
+
 export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const id = url.pathname.split('/').filter(Boolean).at(-1);
+  const id = requestCaseId(request);
   if (!id) return Response.json({ error: 'Case id is required' }, { status: 400 });
 
   const ownerKey = request.headers.get('x-carry-owner') ?? 'alpha-local';
   const sql = getSql();
 
   const [item] = await sql`
-    SELECT id, title, outcome, summary, state, domain, space_key, next_action, decision, plan, created_at, updated_at
+    SELECT id, title, outcome, summary, state, domain, space_key, source_text, next_action, decision, plan, created_at, updated_at
     FROM carry_cases
     WHERE id = ${id}::uuid AND owner_key = ${ownerKey}
     LIMIT 1
   `;
-
   if (!item) return Response.json({ error: 'Case not found' }, { status: 404 });
 
   const events = await sql`
@@ -107,7 +112,13 @@ export async function GET(request: Request) {
     ORDER BY created_at ASC
   `;
 
-  const evidence = events.flatMap((event) => {
+  const lastResetIndex = events.reduce((latest, event, index) => {
+    const payload = event.payload && typeof event.payload === 'object' ? event.payload as Record<string, unknown> : {};
+    return event.type === 'case_edited' && payload.resetsWork === true ? index : latest;
+  }, -1);
+  const currentEvents = events.slice(lastResetIndex + 1);
+
+  const evidence = currentEvents.flatMap((event) => {
     const payload = event.payload && typeof event.payload === 'object' ? event.payload as Record<string, unknown> : {};
     if (event.type !== 'action_completed' || typeof payload.body !== 'string' || !payload.body.trim()) return [];
     const options = normaliseOptions(payload.options);
@@ -122,6 +133,16 @@ export async function GET(request: Request) {
     }];
   });
 
+  const latestFeedback = [...currentEvents].reverse().find((event) => event.type === 'case_feedback');
+  const feedbackPayload = latestFeedback?.payload && typeof latestFeedback.payload === 'object'
+    ? latestFeedback.payload as Record<string, unknown>
+    : null;
+  const rating = feedbackPayload?.rating;
+  const feedback = latestFeedback && (rating === 'good' || rating === 'mostly' || rating === 'missed') ? {
+    rating,
+    note: typeof feedbackPayload?.note === 'string' && feedbackPayload.note.trim() ? feedbackPayload.note.trim() : undefined,
+  } : undefined;
+
   return Response.json({
     id: item.id,
     title: item.title,
@@ -130,11 +151,13 @@ export async function GET(request: Request) {
     state: item.state,
     domain: item.domain,
     space: item.space_key === 'personal' ? 'Personal' : item.space_key,
+    sourceText: item.source_text ?? '',
     nextAction: item.next_action,
     decisionLabel: item.decision?.label ?? undefined,
     decisionInput: decisionInputFrom(item.decision, item.next_action, item.domain),
     plan: item.plan ?? [],
     evidence,
+    feedback,
     activity: events.map((event) => ({
       id: event.id,
       at: new Date(event.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
@@ -142,4 +165,101 @@ export async function GET(request: Request) {
       label: event.label,
     })),
   });
+}
+
+export async function PATCH(request: Request) {
+  const id = requestCaseId(request);
+  if (!id) return Response.json({ error: 'Case id is required' }, { status: 400 });
+  const ownerKey = request.headers.get('x-carry-owner') ?? 'alpha-local';
+  const sql = getSql();
+
+  try {
+    const body = await request.json() as { sourceText?: string; title?: string };
+    const [current] = await sql`
+      SELECT id, title, source_text, domain
+      FROM carry_cases
+      WHERE id = ${id}::uuid AND owner_key = ${ownerKey}
+      LIMIT 1
+    `;
+    if (!current) return Response.json({ error: 'Case not found' }, { status: 404 });
+
+    const currentSource = String(current.source_text ?? '').trim();
+    const sourceText = body.sourceText === undefined ? currentSource : body.sourceText.trim();
+    const titleOverride = body.title === undefined ? String(current.title) : body.title.trim();
+    if (!sourceText) return Response.json({ error: 'What needs sorting cannot be empty' }, { status: 400 });
+    if (!titleOverride) return Response.json({ error: 'Case title cannot be empty' }, { status: 400 });
+
+    const sourceChanged = sourceText !== currentSource;
+    const titleChanged = titleOverride !== String(current.title);
+    if (!sourceChanged && !titleChanged) return Response.json({ caseId: id, changed: false });
+
+    if (!sourceChanged) {
+      await sql`
+        UPDATE carry_cases SET title = ${titleOverride.slice(0, 80)}, updated_at = now()
+        WHERE id = ${id}::uuid AND owner_key = ${ownerKey}
+      `;
+      await sql`
+        INSERT INTO carry_case_events (case_id, type, actor, label, payload)
+        VALUES (${id}::uuid, 'case_edited', 'you', 'Renamed this case', ${JSON.stringify({ resetsWork: false })}::jsonb)
+      `;
+      return Response.json({ caseId: id, changed: true, reran: false });
+    }
+
+    const learningSignals = formatLearningSignals(await getOwnerLearningSignals(ownerKey, id));
+    const understood = await understandCase(sourceText, learningSignals);
+    const plan = withStepIds(understood.plan);
+    const decision = understood.decisionLabel ? {
+      label: understood.decisionLabel,
+      inputKind: understood.decisionInput?.kind ?? 'text',
+      askRadius: understood.decisionInput?.askRadius ?? false,
+    } : null;
+
+    await sql`
+      UPDATE carry_cases
+      SET title = ${body.title === undefined ? understood.title : titleOverride.slice(0, 80)},
+          outcome = ${understood.outcome}, summary = ${understood.summary}, state = ${understood.state}::carry_case_state,
+          domain = ${understood.domain}::carry_case_domain, source_text = ${sourceText}, next_action = ${understood.nextAction},
+          decision = ${decision ? JSON.stringify(decision) : null}::jsonb, waiting = null,
+          plan = ${JSON.stringify(plan)}::jsonb, completed_at = null, updated_at = now()
+      WHERE id = ${id}::uuid AND owner_key = ${ownerKey}
+    `;
+    await sql`
+      INSERT INTO carry_case_events (case_id, type, actor, label, payload)
+      VALUES (
+        ${id}::uuid, 'case_edited', 'you', 'Changed what Carry needs to sort',
+        ${JSON.stringify({ resetsWork: true, previousSourceText: currentSource, sourceText })}::jsonb
+      )
+    `;
+
+    if (understood.state === 'needs_user' && understood.decisionLabel) {
+      await sql`
+        INSERT INTO carry_case_events (case_id, type, actor, label, payload)
+        VALUES (
+          ${id}::uuid, 'decision_requested', 'carry', ${understood.decisionLabel},
+          ${JSON.stringify({ inputKind: decision?.inputKind ?? 'text', askRadius: decision?.askRadius ?? false })}::jsonb
+        )
+      `;
+      return Response.json({ caseId: id, changed: true, reran: true, result: { kind: 'needs_user' } });
+    }
+
+    const result = await advanceCase(id, ownerKey);
+    return Response.json({ caseId: id, changed: true, reran: true, result });
+  } catch (error) {
+    console.error('case_edit_failed', { id, error });
+    return Response.json({ error: error instanceof Error ? error.message : 'Carry could not update this case' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  const id = requestCaseId(request);
+  if (!id) return Response.json({ error: 'Case id is required' }, { status: 400 });
+  const ownerKey = request.headers.get('x-carry-owner') ?? 'alpha-local';
+  const sql = getSql();
+  const [deleted] = await sql`
+    DELETE FROM carry_cases
+    WHERE id = ${id}::uuid AND owner_key = ${ownerKey}
+    RETURNING id
+  `;
+  if (!deleted) return Response.json({ error: 'Case not found' }, { status: 404 });
+  return Response.json({ deleted: true, caseId: id });
 }

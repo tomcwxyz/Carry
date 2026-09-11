@@ -83,6 +83,13 @@ export type CarryCaseResponse =
   | { text: string }
   | { text?: string; location: CarryLocationResponse };
 
+export type CaseFeedbackRating = 'good' | 'mostly' | 'missed';
+
+export interface CaseFeedback {
+  rating: CaseFeedbackRating;
+  note?: string;
+}
+
 export interface CarryCase {
   id: string;
   title: string;
@@ -91,10 +98,12 @@ export interface CarryCase {
   state: CaseState;
   domain: CaseDomain;
   space: string;
+  sourceText?: string;
   nextAction?: string;
   decisionLabel?: string;
   decisionInput?: CaseDecisionInput;
   plan: PlanStep[];
   activity: CaseEvent[];
   evidence: CaseEvidence[];
+  feedback?: CaseFeedback;
 }

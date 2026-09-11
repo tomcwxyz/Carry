@@ -1,5 +1,6 @@
 import { advanceCase } from '../src/server/case-advance.js';
 import { fallbackCase, understandCase } from '../src/server/case-understanding.js';
+import { formatLearningSignals, getOwnerLearningSignals } from '../src/server/case-learning.js';
 import { getSql } from '../src/server/db.js';
 
 export const maxDuration = 60;
@@ -83,7 +84,8 @@ export async function POST(request: Request) {
     let understandingFailed = false;
     let understandingError: string | null = null;
     try {
-      understood = await understandCase(sourceText);
+      const learningSignals = formatLearningSignals(await getOwnerLearningSignals(ownerKey));
+      understood = await understandCase(sourceText, learningSignals);
     } catch (error) {
       understandingFailed = true;
       understandingError = error instanceof Error ? error.message : 'Unknown case understanding error';
