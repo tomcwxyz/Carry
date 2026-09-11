@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { normaliseResearchSynthesis, researchSynthesisJsonSchema, type ResearchSynthesis } from './actionable-result.js';
 import { getCaseModel } from './case-understanding.js';
+import { formatLearningSignals, getOwnerLearningSignals } from './case-learning.js';
 import { decisionInputJsonSchema, decisionInputSchema, normaliseDecisionInput, type DecisionInput } from './decision-input.js';
 import { getSql } from './db.js';
 import { createOpenAIResponse, getOpenAIOutputText } from './openai-response.js';
@@ -83,6 +84,7 @@ type CaseSnapshot = {
   decision: unknown;
   plan: unknown;
   events: Array<{ type: string; actor: string; label: string; payload: unknown }>;
+  learningSignals: string[];
 };
 
 const RUNNER_SYSTEM = `You are Carry's bounded case runner. Choose exactly one useful next step.
@@ -96,6 +98,7 @@ For household services and repairs, once location/building details are available
 For purchases, once requirements are adequate, research options rather than asking the user to browse.
 If a recent action_completed event already contains a grounded shortlist and prepared contact action, do not research the same thing again. Stop at the human/consequential boundary and make the next action precise.
 When kind=needs_user, decisionInput tells the mobile app how to collect the blocking input. Use kind=location only when the user's current/place location is genuinely the missing information. Set askRadius=true only when Carry will search for nearby providers, places or options and the distance matters. For choices, dates, building details or other facts use kind=text. For every other kind, decisionLabel and decisionInput must be null.
+Recent explicit user feedback may be supplied in the case context. Treat it as soft working preferences only when relevant, especially notes about over-researching, unnecessary interruptions, poor hand-backs or missing action. Do not overgeneralise from unrelated domains and never treat it as factual evidence for the current case.
 Keep every field terse. Keep the plan small, ordered and honest. Unless the case is done, exactly one plan step should be active. Earlier completed steps should be done and later steps should be todo.`;
 
 function clip(value: string, max: number) {
@@ -171,6 +174,7 @@ function snapshotText(snapshot: CaseSnapshot) {
     decision: snapshot.decision,
     plan: snapshot.plan,
     recentEvents: events,
+    recentExplicitUserFeedback: snapshot.learningSignals,
   }, null, 2).slice(0, 14000);
 }
 
@@ -247,6 +251,7 @@ async function loadSnapshot(caseId: string, ownerKey: string): Promise<CaseSnaps
     WHERE case_id = ${caseId}::uuid
     ORDER BY created_at ASC
   `;
+  const learningSignals = formatLearningSignals(await getOwnerLearningSignals(ownerKey, caseId));
 
   return {
     id: item.id,
@@ -265,6 +270,7 @@ async function loadSnapshot(caseId: string, ownerKey: string): Promise<CaseSnaps
       label: event.label,
       payload: event.payload ?? {},
     })),
+    learningSignals,
   };
 }
 
