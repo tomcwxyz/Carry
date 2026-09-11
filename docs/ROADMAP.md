@@ -1,12 +1,12 @@
 # Carry — roadmap
 
-## Current focus — Android Alpha #4: turn research into action
+## Current focus — Android Alpha #6: manage, finish and teach Carry
 
-The working-alpha backend gate has passed: 10/10 consecutive production text captures, the real multipart voice path, grounded household/purchase/admin recipes and CI are green. Android Alpha #4 packages the first version intended to materially advance a case rather than simply capture and persist it.
+The working-alpha backend gate has passed and real on-device service/repair tests have proved the core loop: Carry can understand a problem, use location, research relevant options and turn that research into an actionable recommendation with verified contact routes and a prepared next step.
 
-Two real on-device service/repair tests now prove that Carry can understand the problem, use location, research relevant options and make a reasoned recommendation. They also exposed the next product boundary: a useful shortlist still feels like homework when contact routes, prepared enquiry text and the immediate next action are buried or absent.
+The next gap is basic case ownership. A user must be able to correct a case, finish it and remove it without fighting the agent. Those actions are also valuable learning signals: Carry should know when its interpretation was edited, when the user says the outcome is complete, and whether it handled the case well.
 
-The immediate priority is therefore **actionable results**: Carry should turn research into a small recommendation set with verified contact routes, prepare the next enquiry/call brief itself, and stop only at the genuine human or consequential boundary. Do not add more connectors until this interaction feels good.
+The immediate priority is therefore **case management + the first explicit learning loop**. Deeper preference learning remains a later evaluation/learning phase; this slice records explicit feedback and makes it available as soft context for future cases without pretending the model has permanently retrained itself.
 
 Roadmap alpha numbers describe capability stages; GitHub/Android build numbers are build artefacts.
 
@@ -40,7 +40,7 @@ Roadmap alpha numbers describe capability stages; GitHub/Android build numbers a
 
 ## Alpha 2 — Carry actually carries
 
-### Implemented in the working-alpha slice
+### Implemented
 
 - [x] bounded `runCase` / `advanceCase` orchestration loop
 - [x] grounded web research worker with captured source evidence
@@ -51,23 +51,31 @@ Roadmap alpha numbers describe capability stages; GitHub/Android build numbers a
 - [x] optional search radius only where distance matters
 - [x] researched household-service, purchase and general web/admin recipes
 - [x] failures surfaced as failures with retry paths
-- [x] no knowingly fake booking/send/action buttons in the working-alpha flow
 - [x] production reliability gate across text + voice
+- [x] no more than three strong local-service options
+- [x] evidence-backed phone/email/contact-form/website routes
+- [x] visually prioritised recommendation
+- [x] prepared enquiry / quote request / call brief
+- [x] raw sources collapsed behind evidence disclosure
+- [x] production actionable-results gate across gutter/purchase/admin recipes
 
-### Alpha 2 usability/reliability pass — current
+### Case ownership — current
 
-- [x] test Android Alpha #4 end-to-end on a real device with multiple real cases
-- [x] prove location → grounded local shortlist on the gutter case
-- [x] prove a second service/repair domain with van bodywork research
-- [ ] return no more than three strong options rather than a directory-style result
-- [ ] collect evidence-backed phone/email/contact-form/website routes for shortlisted providers
-- [ ] make the best-fit recommendation visually obvious
-- [ ] prepare the next enquiry, quote request or call brief without asking the user to restate case facts
-- [ ] collapse raw sources behind an evidence disclosure rather than filling the primary result card
-- [ ] gutter case: recommendation → usable contact route → useful booking/enquiry hand-back
+- [x] edit/rename a case
+- [x] changing the underlying brief re-understands the case and automatically resumes Carry
+- [x] prior evidence becomes historical after a substantive edit rather than being shown as current
+- [x] mark a case complete manually
+- [x] completed cases leave Now but remain visible in Cases
+- [x] permanently delete a case and its case history
+- [x] ask for lightweight completion feedback: yes / mostly / no + optional correction note
+- [x] feed recent explicit feedback back into future case understanding and bounded runs as soft context
+- [ ] test edit → re-plan → continue on-device
+- [ ] test complete → feedback → later similar case on-device
+- [ ] test delete and completed-case behaviour on-device
+
+### Usability/reliability still to test
+
 - [ ] gutter case with location permission denied → pin/postcode fallback still works
-- [ ] purchase case → comparison → recommendation → clear remaining decision
-- [ ] general admin/web case → evidence → next useful action
 - [ ] repeat at least one complete flow through voice
 - [ ] deliberately exercise failure + retry on-device
 - [ ] tighten Working / Waiting / Needs you / Done language and visual hierarchy
@@ -87,8 +95,10 @@ Golden paths:
 - gutter problem → research local options → concise recommendation → verified contact route → booking/enquiry boundary
 - MOT → determine due state → shortlist/book with approval
 - purchase → requirements → shortlist → recommendation
+- correction → edit brief → Carry re-plans from the corrected intent
+- completion → user marks done → gives feedback → future similar case can use that explicit signal
 
-**Exit:** several different real-life cases can be handed to Carry and materially advanced with low user effort, clear evidence, safe hand-backs and no fake agency.
+**Exit:** several different real-life cases can be handed to Carry and materially advanced with low user effort, clear evidence, safe hand-backs and no fake agency; users remain in control of the case lifecycle.
 
 ## Alpha 3 — connected work
 
@@ -117,13 +127,19 @@ Golden paths:
 
 ## Alpha 5 — learning and evaluation
 
+The explicit per-case feedback added during Alpha 2 is the first input to this phase, not the finished learning system.
+
+- [x] capture explicit per-case quality feedback
+- [x] make recent explicit feedback available to future case reasoning
 - [ ] inspectable working preferences
 - [ ] preference proposals from repeated behaviour
+- [ ] distinguish stable preferences from one-off corrections
 - [ ] per-case outcome evaluation
 - [ ] interruption-rate metric
 - [ ] human-touches-per-completed-case metric
 - [ ] action success/failure and rollback metrics
 - [ ] cost/token/model-efficiency harnesses
+- [ ] user-visible explanation of what Carry has learned and the ability to correct it
 
 ## North-star metrics
 
