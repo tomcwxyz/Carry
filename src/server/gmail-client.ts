@@ -40,9 +40,21 @@ export function gmailConfigured() {
   );
 }
 
+function utf8ToBase64(value: string) {
+  const bytes = new TextEncoder().encode(value);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function base64ToUtf8(value: string) {
+  const binary = atob(value);
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
 function base64Url(value: string) {
-  return Buffer.from(value, 'utf8')
-    .toString('base64')
+  return utf8ToBase64(value)
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/g, '');
@@ -51,12 +63,12 @@ function base64Url(value: string) {
 function decodeBase64Url(value: string) {
   const normalised = value.replace(/-/g, '+').replace(/_/g, '/');
   const padding = '='.repeat((4 - (normalised.length % 4)) % 4);
-  return Buffer.from(`${normalised}${padding}`, 'base64').toString('utf8');
+  return base64ToUtf8(`${normalised}${padding}`);
 }
 
 function encodeHeader(value: string) {
   return /[^\x20-\x7E]/.test(value)
-    ? `=?UTF-8?B?${Buffer.from(value, 'utf8').toString('base64')}?=`
+    ? `=?UTF-8?B?${utf8ToBase64(value)}?=`
     : value;
 }
 
