@@ -68,16 +68,29 @@ A valid Waiting record stores at least:
 
 A model-generated Waiting state without this structured evidence is rejected and Carry continues instead. A later `external_update` clears Waiting and resumes the bounded runner.
 
-## 6. Human-only actions
+## 6. Done is evidence-backed
+
+Done means the desired outcome is genuinely complete, not merely that Carry has finished a step or that the model thinks there is nothing else to do.
+
+A case can become Done through either:
+
+- explicit user confirmation; or
+- a trusted external verifier reporting `outcome_verified` with enough evidence to identify what was verified.
+
+A model-generated `done` result is treated only as a proposal. Carry changes the case to `needs_user` with a first-class completion hand-back: **Yes, it’s done** or **Not yet**. Only confirmation through that hand-back, the manual Complete control, or a trusted verifier closes the case.
+
+External verification uses the same server-to-server credential boundary as executor lifecycle events and may include a verifier name, concise evidence summary, external reference and metadata.
+
+## 7. Human-only actions
 
 Some steps remain genuinely human, for example a physical repair, attending an appointment, making a phone conversation where no calling agent exists, identity verification or a judgement that the user must personally make.
 
 Carry should not frame these as approvals. It should use a normal fact/decision hand-back, minimise the work required from the user, and resume as soon as the result is supplied.
 
-## 7. Declines
+## 8. Declines and not-yet confirmations
 
-A decline is useful context, not a failure. Carry should record it and look for a materially different route rather than immediately asking the same question again.
+A decline or “not yet” is useful context, not a failure. Carry should record it and look for the next materially useful route rather than immediately asking the same question again.
 
-## 8. Notification implication
+## 9. Notification implication
 
-Notifications should eventually be generated from hand-back transitions, not from every case event. A notification is justified when a case newly enters `needs_user`, particularly for an approval or genuinely blocking fact. Waiting should normally stay quiet until an external update changes the case or Carry genuinely needs the user again.
+Notifications should eventually be generated from hand-back transitions, not from every case event. A notification is justified when a case newly enters `needs_user`, particularly for an approval, completion confirmation or genuinely blocking fact. Waiting should normally stay quiet until an external update changes the case or Carry genuinely needs the user again.
