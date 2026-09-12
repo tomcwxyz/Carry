@@ -6,7 +6,9 @@ The working-alpha backend gate has passed and real on-device service/repair test
 
 CRUD, explicit completion feedback, consequence-based approvals, evidence-backed Waiting and outcome verification are now implemented. Carry distinguishes what the model believes from what actually happened: approval is permission, execution evidence proves an external side effect, Waiting requires a real dependency, and Done requires confirmation or trusted verification.
 
-The remaining Alpha 2 work is therefore less about adding states and more about proving the loop on-device, reducing interruptions, adding hand-back-only notifications and measuring whether Carry actually reduces human effort.
+The first real executor is now implemented behind that contract: when Carry has a verified email contact and prepared message, a configured Gmail mailbox can send the exact approved message, record Gmail message/thread evidence, enter Waiting and resume when a reply is detected.
+
+The remaining Alpha 2 work is therefore mostly proving the loop on-device, reducing interruptions, adding hand-back-only notifications and measuring whether Carry actually reduces human effort.
 
 Roadmap alpha numbers describe capability stages; GitHub/Android build numbers are build artefacts.
 
@@ -91,11 +93,16 @@ Roadmap alpha numbers describe capability stages; GitHub/Android build numbers a
 - [x] model-generated Done is treated as a proposal and cannot close a case itself
 - [x] manual completion goes through one trusted completion boundary
 - [x] authenticated external `outcome_verified` boundary can close a case with evidence
+- [x] first real executor: approved Gmail send with message/thread evidence
+- [x] executable email approvals only appear with a verified email contact + prepared message + configured Gmail mailbox
+- [x] Gmail sends move into evidence-backed Waiting rather than Done
+- [x] 15-minute Gmail reply polling wakes waiting cases and resumes Carry with reply content
 - [x] execution/waiting and outcome-verification smoke harnesses ready for a deployed executor secret
-- [ ] test approval → resume and decline → alternate route on-device/API
+- [ ] configure production Gmail OAuth, executor and cron secrets
+- [ ] test approval → Gmail send → Waiting → reply → resume end-to-end in production
+- [ ] test decline → alternate route on-device/API
 - [ ] test model-proposed completion → confirm / not yet on-device
 - [ ] run execution/waiting and verification smokes against production after executor secret is configured
-- [ ] add the first real execution adapter behind the executor contract
 
 ### Usability/reliability still to test
 
@@ -108,12 +115,13 @@ Roadmap alpha numbers describe capability stages; GitHub/Android build numbers a
 
 - [x] robust `waiting` behaviour for real external dependencies
 - [x] stronger outcome verification/completion semantics
+- [x] first real consequential executor behind the evidence contract
 - [ ] notifications only for genuine hand-backs
 - [ ] evaluation for interruption rate, human touches and time-to-first-useful-action
 
 Golden paths:
 
-- gutter problem → research local options → concise recommendation → verified contact route → booking/enquiry boundary
+- gutter problem → research local options → concise recommendation → verified email route → prepared enquiry → one approval → Gmail send → Waiting → reply resumes case
 - MOT → determine due state → shortlist/book with approval when an executor exists
 - purchase → requirements → shortlist → recommendation
 - correction → edit brief → Carry re-plans from the corrected intent
@@ -126,7 +134,19 @@ Golden paths:
 
 Do **not** rush here before the Alpha 2 on-device loop feels good. The connectors should increase what Carry can carry, not hide weaknesses in the core interaction model.
 
-- [ ] Gmail
+### Gmail
+
+- [x] provider boundary for outbound Gmail send
+- [x] reply detection for Carry-sent threads
+- [ ] per-user OAuth connection rather than one alpha mailbox
+- [ ] read/search existing inbox context
+- [ ] resolve people/conversations from natural-language references
+- [ ] draft replies inside existing Gmail threads
+- [ ] attachments
+- [ ] push/watch delivery instead of polling where worthwhile
+
+### Other connected work
+
 - [ ] Google Calendar
 - [ ] files
 - [ ] GitHub
@@ -135,7 +155,7 @@ Do **not** rush here before the Alpha 2 on-device loop feels good. The connector
 
 Golden paths:
 
-- “Respond to Dan” → context → draft → approval/send
+- “Respond to Dan” → find the conversation → understand context → draft → approval → send → wait for reply
 - “Get this release ready” → repository → checks → PR/release hand-back
 
 ## Alpha 4 — context, camera and sharing
