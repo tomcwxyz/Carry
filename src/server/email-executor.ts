@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { ResearchSynthesis } from './actionable-result.js';
+import { getSql } from './db.js';
 import { recordExecutionLifecycleEvent } from './execution-lifecycle.js';
 
 const emailExecutionSchema = z.object({
@@ -30,33 +30,71 @@ export function configuredExecutionCapabilities() {
   return gmailEmailConfigured() ? ['email.send'] : [];
 }
 
-function preferredEmailContact(result: ResearchSynthesis) {
+function emailIntentFromActionPayload(value: unknown): EmailExecutionIntent | null {
+  if (!gmailEmailConfigured() || !value || typeof value !== 'object') return null;
+  const payload = value as Record<string, unknown>;
+  const prepared = payload.preparedAction && typeof payload.preparedAction === 'object'
+    ? payload.preparedAction as Record<string, unknown>
+    : null;
+  const body = typeof prepared?.body === 'string' ? prepared.body.trim() : '';
+  const label = typeof prepared?.label === 'string' ? prepared.label.trim() : '';
+  const subject = typeof prepared?.subject === 'string' && prepared.subject.trim()
+    ? prepared.subject.trim()
+    : label;
+  if (!body || !subject) return null;
+
+  const options = Array.isArray(payload.options) ? payload.options : [];
   const ranked = [
-    ...result.options.filter((option) => option.recommended),
-    ...result.options.filter((option) => !option.recommended),
+    ...options.filter((option) => option && typeof option === 'object' && (option as Record<string, unknown>).recommended === true),
+    ...options.filter((option) => !option || typeof option !== 'object' || (option as Record<string, unknown>).recommended !== true),
   ];
+
   for (const option of ranked) {
-    const email = option.contacts.find((contact) => contact.kind === 'email');
-    if (email?.value) return email.value.trim();
+    if (!option || typeof option !== 'object') continue;
+    const contacts = Array.isArray((option as Record<string, unknown>).contacts)
+      ? (option as Record<string, unknown>).contacts as unknown[]
+      : [];
+    for (const contact of contacts) {
+      if (!contact || typeof contact !== 'object') continue;
+      const item = contact as Record<string, unknown>;
+      if (item.kind !== 'email' || typeof item.value !== 'string') continue;
+      const parsed = emailExecutionSchema.safeParse({
+        capability: 'email.send',
+        provider: 'gmail',
+        to: item.value.trim(),
+        subject,
+        body,
+      });
+      if (parsed.success) return parsed.data;
+    }
   }
   return null;
 }
 
-export function deriveEmailExecutionIntent(result: ResearchSynthesis): EmailExecutionIntent | null {
+export async function getCaseEmailExecutionIntent(caseId: string, ownerKey: string) {
   if (!gmailEmailConfigured()) return null;
-  if (result.kind !== 'needs_user' || result.decisionInput?.kind !== 'approval') return null;
-  if (!result.preparedAction?.body) return null;
-  const to = preferredEmailContact(result);
-  if (!to) return null;
+  const sql = getSql();
+  const events = await sql`
+    SELECT payload
+    FROM carry_case_events
+    WHERE case_id = ${caseId}::uuid
+      AND type = 'action_completed'
+      AND created_at > COALESCE((
+        SELECT MAX(created_at)
+        FROM carry_case_events
+        WHERE case_id = ${caseId}::uuid
+          AND type = 'case_edited'
+          AND payload->>'resetsWork' = 'true'
+      ), to_timestamp(0))
+    ORDER BY created_at DESC
+    LIMIT 8
+  `;
 
-  const parsed = emailExecutionSchema.safeParse({
-    capability: 'email.send',
-    provider: 'gmail',
-    to,
-    subject: result.preparedAction.subject?.trim() || result.preparedAction.label.trim(),
-    body: result.preparedAction.body,
-  });
-  return parsed.success ? parsed.data : null;
+  for (const event of events) {
+    const intent = emailIntentFromActionPayload(event.payload);
+    if (intent) return intent;
+  }
+  return null;
 }
 
 function base64Url(value: string) {
