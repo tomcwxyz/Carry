@@ -4,18 +4,13 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, Text
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ActionableResultCard } from '../../src/features/cases/ActionableResultCard';
+import { ApprovalDecisionInput } from '../../src/features/cases/ApprovalDecisionInput';
 import { CaseFeedbackCard } from '../../src/features/cases/CaseFeedbackCard';
+import { CaseStatusCard } from '../../src/features/cases/CaseStatusCard';
 import { completeCase, continueCase, deleteCase, fetchCase, respondToCase, submitCaseFeedback } from '../../src/features/cases/case-service';
 import type { CarryCase, CarryCaseResponse, CaseFeedbackRating } from '../../src/features/cases/types';
 import { LocationDecisionInput } from '../../src/features/location/LocationDecisionInput';
 import { colours, radius, spacing } from '../../src/theme/tokens';
-
-const stateLabels = {
-  needs_user: 'NEEDS YOU',
-  carrying: 'WORKING',
-  waiting: 'WAITING',
-  done: 'DONE',
-} as const;
 
 export default function CaseScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -44,13 +39,22 @@ export default function CaseScreen() {
   async function submitResponse(response: string | CarryCaseResponse) {
     if (!id || working) return;
     if (typeof response === 'string' && !response.trim()) return;
+    const previous = item;
     setWorking(true);
     setError(null);
+    setItem((current) => current ? {
+      ...current,
+      state: 'carrying',
+      nextAction: 'Carry is picking this back up…',
+      decisionLabel: undefined,
+      decisionInput: undefined,
+    } : current);
     try {
       await respondToCase(id, response);
       setResponseText('');
       await load();
     } catch (cause) {
+      setItem(previous);
       setError(cause instanceof Error ? cause.message : 'Carry could not continue this case');
       await load().catch(() => undefined);
     } finally {
@@ -60,12 +64,15 @@ export default function CaseScreen() {
 
   async function retryCase() {
     if (!id || working) return;
+    const previous = item;
     setWorking(true);
     setError(null);
+    setItem((current) => current ? { ...current, state: 'carrying', nextAction: 'Carry is trying the next step again…' } : current);
     try {
       await continueCase(id);
       await load();
     } catch (cause) {
+      setItem(previous);
       setError(cause instanceof Error ? cause.message : 'Carry could not retry this case');
       await load().catch(() => undefined);
     } finally {
@@ -75,12 +82,15 @@ export default function CaseScreen() {
 
   async function markComplete() {
     if (!id || working) return;
+    const previous = item;
     setWorking(true);
     setError(null);
+    setItem((current) => current ? { ...current, state: 'done', nextAction: 'Marked complete by you.' } : current);
     try {
       await completeCase(id);
       await load();
     } catch (cause) {
+      setItem(previous);
       setError(cause instanceof Error ? cause.message : 'Carry could not mark this complete');
     } finally {
       setWorking(false);
@@ -117,7 +127,7 @@ export default function CaseScreen() {
   }
 
   if (loading) {
-    return <SafeAreaView style={styles.safe}><View style={styles.empty}><ActivityIndicator /><Text style={styles.muted}>Carry is loading this case…</Text></View></SafeAreaView>;
+    return <SafeAreaView style={styles.safe}><View style={styles.empty}><ActivityIndicator /><Text style={styles.muted}>Loading this case…</Text></View></SafeAreaView>;
   }
 
   if (!item) {
@@ -138,7 +148,10 @@ export default function CaseScreen() {
   const actionableEvidence = evidenceItems.find((evidence) =>
     Boolean(evidence.preparedAction) || evidence.options.some((option) => option.contacts.length > 0),
   );
-  const hasActionableHandback = item.state === 'needs_user' && Boolean(actionableEvidence);
+  const hasHumanActionHandback = item.state === 'needs_user'
+    && decisionInput.kind !== 'approval'
+    && Boolean(actionableEvidence);
+  const needsDecision = item.state === 'needs_user' && !hasHumanActionHandback;
   const hasRecommendation = evidenceItems.some((evidence) => evidence.options.some((option) => option.recommended));
 
   const responseControls = (
@@ -181,36 +194,13 @@ export default function CaseScreen() {
           </Pressable>
         </View>
 
-        <Text style={styles.state}>{stateLabels[item.state]}</Text>
         <Text style={styles.saved}>Saved to Carry</Text>
         <Text style={styles.title}>{item.title}</Text>
         <Text style={styles.outcome}>{item.outcome}</Text>
 
-        <View style={styles.block}>
-          <Text style={styles.blockTitle}>Now</Text>
-          <Text style={styles.nowText}>{item.nextAction}</Text>
+        <CaseStatusCard state={item.state} nextAction={item.nextAction} busy={working && item.state !== 'done'} />
 
-          {item.state === 'needs_user' && !hasActionableHandback ? (
-            <View style={styles.responseCard}>
-              {item.decisionLabel && item.decisionLabel !== item.nextAction ? <Text style={styles.responsePrompt}>{item.decisionLabel}</Text> : null}
-              {decisionInput.kind === 'location' ? (
-                <LocationDecisionInput
-                  decision={decisionInput}
-                  disabled={working}
-                  onSubmit={(response) => { void submitResponse(response); }}
-                />
-              ) : responseControls}
-            </View>
-          ) : null}
-
-          {canRetry ? (
-            <Pressable disabled={working} onPress={retryCase} style={[styles.actionButton, working && styles.disabledButton]}>
-              {working ? <ActivityIndicator color={colours.white} /> : <Text style={styles.actionButtonText}>Try again</Text>}
-            </Pressable>
-          ) : null}
-
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-        </View>
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
         {evidenceItems.length > 0 ? (
           <View style={styles.block}>
@@ -221,11 +211,40 @@ export default function CaseScreen() {
           </View>
         ) : null}
 
-        {hasActionableHandback ? (
+        {needsDecision ? (
           <View style={styles.block}>
-            <Text style={styles.blockTitle}>After you act</Text>
-            <Text style={styles.helperText}>Call, email or use the contact route above. Then tell Carry what happened and it can keep carrying this.</Text>
+            <Text style={styles.blockTitle}>What Carry needs</Text>
+            {item.decisionLabel ? <Text style={styles.responsePrompt}>{item.decisionLabel}</Text> : null}
+            <View style={styles.responseCard}>
+              {decisionInput.kind === 'location' ? (
+                <LocationDecisionInput
+                  decision={decisionInput}
+                  disabled={working}
+                  onSubmit={(response) => { void submitResponse(response); }}
+                />
+              ) : decisionInput.kind === 'approval' ? (
+                <ApprovalDecisionInput
+                  disabled={working}
+                  onSubmit={(approval) => { void submitResponse({ approval }); }}
+                />
+              ) : responseControls}
+            </View>
+          </View>
+        ) : null}
+
+        {hasHumanActionHandback ? (
+          <View style={styles.block}>
+            <Text style={styles.blockTitle}>Your turn</Text>
+            <Text style={styles.helperText}>Use the prepared contact route above. Then tell Carry what happened; it will take it from there.</Text>
             <View style={styles.responseCard}>{responseControls}</View>
+          </View>
+        ) : null}
+
+        {canRetry ? (
+          <View style={styles.block}>
+            <Pressable disabled={working} onPress={retryCase} style={[styles.actionButton, working && styles.disabledButton]}>
+              {working ? <ActivityIndicator color={colours.white} /> : <Text style={styles.actionButtonText}>Try again</Text>}
+            </Pressable>
           </View>
         ) : null}
 
@@ -278,19 +297,17 @@ const styles = StyleSheet.create({
   manageText: { color: colours.ink, fontSize: 13, fontWeight: '700' },
   deleteText: { color: colours.rust, fontSize: 13, fontWeight: '700' },
   link: { color: colours.rust, fontWeight: '700' }, muted: { color: colours.muted, textAlign: 'center' },
-  state: { color: colours.moss, fontSize: 12, fontWeight: '800', letterSpacing: 1.4, marginTop: spacing.lg },
-  saved: { color: colours.muted, fontSize: 12, marginTop: spacing.xs },
+  saved: { color: colours.muted, fontSize: 12, marginTop: spacing.lg },
   title: { color: colours.ink, fontSize: 34, lineHeight: 38, fontWeight: '700', letterSpacing: -1.2, marginTop: spacing.xs },
   outcome: { color: colours.secondaryInk, fontSize: 18, lineHeight: 26, marginTop: spacing.sm },
   block: { marginTop: spacing.xl, borderTopWidth: 1, borderTopColor: colours.line, paddingTop: spacing.lg },
   blockTitle: { color: colours.ink, fontSize: 20, lineHeight: 25, fontWeight: '700', marginBottom: spacing.md, letterSpacing: -0.2 },
-  nowText: { color: colours.ink, fontSize: 17, lineHeight: 25 },
   helperText: { color: colours.secondaryInk, fontSize: 15, lineHeight: 22 },
-  responseCard: { marginTop: spacing.lg, gap: spacing.sm }, responsePrompt: { color: colours.ink, fontSize: 15, lineHeight: 22, fontWeight: '600' },
+  responseCard: { marginTop: spacing.sm, gap: spacing.sm }, responsePrompt: { color: colours.ink, fontSize: 16, lineHeight: 23, fontWeight: '600' },
   responseInput: { minHeight: 82, borderWidth: 1, borderColor: colours.line, borderRadius: radius.lg, padding: spacing.md, color: colours.ink, backgroundColor: colours.white, fontSize: 16, lineHeight: 22, textAlignVertical: 'top' },
   actionButton: { marginTop: spacing.xs, backgroundColor: colours.ink, borderRadius: radius.pill, minHeight: 52, paddingHorizontal: spacing.lg, alignItems: 'center', justifyContent: 'center' },
   disabledButton: { opacity: 0.45 }, actionButtonText: { color: colours.white, fontWeight: '700', fontSize: 15 },
-  errorText: { color: colours.rust, marginTop: spacing.sm, fontSize: 14, lineHeight: 20 },
+  errorText: { color: colours.rust, marginTop: spacing.md, fontSize: 14, lineHeight: 20 },
   evidenceList: { gap: spacing.md },
   plan: { gap: spacing.md }, planRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }, stepMark: { color: colours.muted, width: 20, fontSize: 15 }, activeMark: { color: colours.rust }, stepText: { flex: 1, color: colours.ink, fontSize: 15, lineHeight: 22 }, doneText: { color: colours.muted },
   activity: { gap: spacing.md }, activityRow: { flexDirection: 'row', gap: spacing.md }, activityTime: { color: colours.muted, fontSize: 12, width: 42, paddingTop: 2 }, activityCopy: { flex: 1 }, activityActor: { color: colours.ink, fontSize: 13, fontWeight: '700' }, activityText: { color: colours.secondaryInk, fontSize: 14, lineHeight: 20, marginTop: 2 },
