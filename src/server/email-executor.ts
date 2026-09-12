@@ -63,14 +63,23 @@ function emailIntentFromActionPayload(value: unknown): EmailExecutionIntent | nu
   return null;
 }
 
+function declinedEmailExecution(value: unknown) {
+  if (!value || typeof value !== 'object') return false;
+  const payload = value as Record<string, unknown>;
+  const execution = payload.execution && typeof payload.execution === 'object'
+    ? payload.execution as Record<string, unknown>
+    : null;
+  return execution?.capability === 'email.send';
+}
+
 export async function getCaseEmailExecutionIntent(caseId: string, ownerKey: string) {
   if (!gmailConfigured()) return null;
   const sql = getSql();
   const events = await sql`
-    SELECT payload
+    SELECT type, payload
     FROM carry_case_events
     WHERE case_id = ${caseId}::uuid
-      AND type = 'action_completed'
+      AND type IN ('action_completed', 'approval_declined')
       AND created_at > COALESCE((
         SELECT MAX(created_at)
         FROM carry_case_events
@@ -79,10 +88,12 @@ export async function getCaseEmailExecutionIntent(caseId: string, ownerKey: stri
           AND payload->>'resetsWork' = 'true'
       ), to_timestamp(0))
     ORDER BY created_at DESC
-    LIMIT 8
+    LIMIT 12
   `;
 
   for (const event of events) {
+    if (event.type === 'approval_declined' && declinedEmailExecution(event.payload)) return null;
+    if (event.type !== 'action_completed') continue;
     const intent = emailIntentFromActionPayload(event.payload);
     if (intent) return intent;
   }
