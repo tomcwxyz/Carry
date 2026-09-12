@@ -1,3 +1,4 @@
+import { gmailConfigured } from '../../../src/server/gmail-client.js';
 import { syncGmailReplies } from '../../../src/server/gmail-reply-sync.js';
 
 export const maxDuration = 60;
@@ -14,6 +15,9 @@ function authorised(request: Request) {
 }
 
 async function run(request: Request) {
+  if (!gmailConfigured()) {
+    return Response.json({ configured: false, checked: 0, resumed: 0, errors: 0 });
+  }
   if (!process.env.CRON_SECRET?.trim() && !process.env.CARRY_EXECUTOR_SECRET?.trim()) {
     return Response.json({ error: 'Gmail reply sync authentication is not configured' }, { status: 503 });
   }
@@ -21,7 +25,7 @@ async function run(request: Request) {
 
   try {
     const result = await syncGmailReplies();
-    return Response.json(result);
+    return Response.json({ configured: true, ...result });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Carry could not sync Gmail replies';
     console.error('gmail_reply_sync_route_failed', { message, error });
