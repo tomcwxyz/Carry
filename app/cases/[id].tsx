@@ -7,6 +7,7 @@ import { ActionableResultCard } from '../../src/features/cases/ActionableResultC
 import { ApprovalDecisionInput } from '../../src/features/cases/ApprovalDecisionInput';
 import { CaseFeedbackCard } from '../../src/features/cases/CaseFeedbackCard';
 import { CaseStatusCard } from '../../src/features/cases/CaseStatusCard';
+import { CompletionDecisionInput } from '../../src/features/cases/CompletionDecisionInput';
 import { completeCase, continueCase, deleteCase, fetchCase, respondToCase, submitCaseFeedback } from '../../src/features/cases/case-service';
 import type { CarryCase, CarryCaseResponse, CaseFeedbackRating } from '../../src/features/cases/types';
 import { LocationDecisionInput } from '../../src/features/location/LocationDecisionInput';
@@ -150,6 +151,7 @@ export default function CaseScreen() {
   );
   const hasHumanActionHandback = item.state === 'needs_user'
     && decisionInput.kind !== 'approval'
+    && decisionInput.kind !== 'completion'
     && Boolean(actionableEvidence);
   const needsDecision = item.state === 'needs_user' && !hasHumanActionHandback;
   const hasRecommendation = evidenceItems.some((evidence) => evidence.options.some((option) => option.recommended));
@@ -226,6 +228,11 @@ export default function CaseScreen() {
                 <ApprovalDecisionInput
                   disabled={working}
                   onSubmit={(approval) => { void submitResponse({ approval }); }}
+                />
+              ) : decisionInput.kind === 'completion' ? (
+                <CompletionDecisionInput
+                  disabled={working}
+                  onSubmit={(completion) => { void submitResponse({ completion }); }}
                 />
               ) : responseControls}
             </View>

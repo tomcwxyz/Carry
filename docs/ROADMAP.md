@@ -4,9 +4,9 @@
 
 The working-alpha backend gate has passed and real on-device service/repair tests have proved the core loop: Carry can understand a problem, use location, research relevant options and turn that research into an actionable recommendation with verified contact routes and a prepared next step.
 
-CRUD, explicit completion feedback and consequence-based approvals are implemented. Carry now also has a server-side execution lifecycle: external tools can report attempted/completed/failed actions, completed actions can create a structured Waiting dependency, and a later external update wakes the case and resumes the bounded runner.
+CRUD, explicit completion feedback, consequence-based approvals, evidence-backed Waiting and outcome verification are now implemented. Carry distinguishes what the model believes from what actually happened: approval is permission, execution evidence proves an external side effect, Waiting requires a real dependency, and Done requires confirmation or trusted verification.
 
-This remains deliberately **evidence-first agency**. Approval is permission, execution evidence proves the side effect happened, Waiting requires a real external dependency, and Done still requires the outcome itself to be verified.
+The remaining Alpha 2 work is therefore less about adding states and more about proving the loop on-device, reducing interruptions, adding hand-back-only notifications and measuring whether Carry actually reduces human effort.
 
 Roadmap alpha numbers describe capability stages; GitHub/Android build numbers are build artefacts.
 
@@ -87,9 +87,14 @@ Roadmap alpha numbers describe capability stages; GitHub/Android build numbers a
 - [x] structured Waiting metadata with executor, action, external reference and optional re-check time
 - [x] reject model-generated Waiting when no structured external dependency exists
 - [x] external update clears Waiting and resumes the bounded runner
-- [x] execution/waiting production smoke harness ready for a deployed executor secret
+- [x] explicit completion confirmation hand-back: Yes, it’s done / Not yet
+- [x] model-generated Done is treated as a proposal and cannot close a case itself
+- [x] manual completion goes through one trusted completion boundary
+- [x] authenticated external `outcome_verified` boundary can close a case with evidence
+- [x] execution/waiting and outcome-verification smoke harnesses ready for a deployed executor secret
 - [ ] test approval → resume and decline → alternate route on-device/API
-- [ ] run execution/waiting smoke against production after deployment
+- [ ] test model-proposed completion → confirm / not yet on-device
+- [ ] run execution/waiting and verification smokes against production after executor secret is configured
 - [ ] add the first real execution adapter behind the executor contract
 
 ### Usability/reliability still to test
@@ -102,8 +107,8 @@ Roadmap alpha numbers describe capability stages; GitHub/Android build numbers a
 ### Still required before Alpha 2 is genuinely complete
 
 - [x] robust `waiting` behaviour for real external dependencies
+- [x] stronger outcome verification/completion semantics
 - [ ] notifications only for genuine hand-backs
-- [ ] stronger outcome verification/completion semantics
 - [ ] evaluation for interruption rate, human touches and time-to-first-useful-action
 
 Golden paths:
@@ -112,7 +117,7 @@ Golden paths:
 - MOT → determine due state → shortlist/book with approval when an executor exists
 - purchase → requirements → shortlist → recommendation
 - correction → edit brief → Carry re-plans from the corrected intent
-- completion → user marks done → gives feedback → future similar case can use that explicit signal
+- completion → Carry proposes done → user confirms or external verifier proves it → feedback → future similar case can use that signal
 - consequential action → Carry prepares → asks once → approve/decline event → executor attempted/completed evidence → Waiting where needed → external update → verify
 
 **Exit:** several different real-life cases can be handed to Carry and materially advanced with low user effort, clear evidence, safe hand-backs and no fake agency; users remain in control of the case lifecycle.

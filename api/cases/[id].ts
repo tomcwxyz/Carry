@@ -89,6 +89,7 @@ function decisionInputFrom(value: unknown, nextAction: unknown, domain: unknown)
   const decision = value as Record<string, unknown>;
 
   if (decision.inputKind === 'approval') return { kind: 'approval', askRadius: false } as const;
+  if (decision.inputKind === 'completion') return { kind: 'completion', askRadius: false } as const;
   if (decision.inputKind === 'location') return { kind: 'location', askRadius: decision.askRadius === true } as const;
   if (decision.inputKind === 'text') return { kind: 'text', askRadius: false } as const;
 

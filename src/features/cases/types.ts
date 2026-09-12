@@ -66,7 +66,7 @@ export interface CaseEvidence {
 }
 
 export interface CaseDecisionInput {
-  kind: 'text' | 'location' | 'approval';
+  kind: 'text' | 'location' | 'approval' | 'completion';
   askRadius: boolean;
 }
 
@@ -80,11 +80,13 @@ export interface CarryLocationResponse {
 }
 
 export type CarryCaseApproval = 'approve' | 'decline';
+export type CarryCaseCompletion = 'confirm' | 'not_yet';
 
 export type CarryCaseResponse =
   | { text: string }
   | { text?: string; location: CarryLocationResponse }
-  | { text?: string; approval: CarryCaseApproval };
+  | { text?: string; approval: CarryCaseApproval }
+  | { text?: string; completion: CarryCaseCompletion };
 
 export type CaseFeedbackRating = 'good' | 'mostly' | 'missed';
 

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const decisionInputSchema = z.object({
-  kind: z.enum(['text', 'location', 'approval']),
+  kind: z.enum(['text', 'location', 'approval', 'completion']),
   askRadius: z.boolean(),
 });
 
@@ -15,7 +15,7 @@ export const decisionInputJsonSchema = {
       type: 'object',
       additionalProperties: false,
       properties: {
-        kind: { type: 'string', enum: ['text', 'location', 'approval'] },
+        kind: { type: 'string', enum: ['text', 'location', 'approval', 'completion'] },
         askRadius: { type: 'boolean' },
       },
       required: ['kind', 'askRadius'],
