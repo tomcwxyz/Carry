@@ -4,9 +4,9 @@
 
 The working-alpha backend gate has passed and real on-device service/repair tests have proved the core loop: Carry can understand a problem, use location, research relevant options and turn that research into an actionable recommendation with verified contact routes and a prepared next step.
 
-CRUD and explicit completion feedback are now implemented. The current build slice moves beyond generic `needs_user` prompts: Carry has a first-class consequence-based approval hand-back, distinct approve/decline events, calmer four-state case UX and optimistic hand-back transitions.
+CRUD, explicit completion feedback and consequence-based approvals are implemented. Carry now also has a server-side execution lifecycle: external tools can report attempted/completed/failed actions, completed actions can create a structured Waiting dependency, and a later external update wakes the case and resumes the bounded runner.
 
-This is deliberately an **approval boundary, not fake agency**. Approval means Carry is authorised to attempt one specific consequential action; it is not evidence that the action happened. Until an execution adapter exists for that action, Carry must keep the final human step honest and precise.
+This remains deliberately **evidence-first agency**. Approval is permission, execution evidence proves the side effect happened, Waiting requires a real external dependency, and Done still requires the outcome itself to be verified.
 
 Roadmap alpha numbers describe capability stages; GitHub/Android build numbers are build artefacts.
 
@@ -82,8 +82,15 @@ Roadmap alpha numbers describe capability stages; GitHub/Android build numbers a
 - [x] distinct `approval_granted` and `approval_declined` events
 - [x] consequence policy documented: approval is scoped authorisation, never proof of execution
 - [x] runner told not to request approval when no execution capability exists
+- [x] server-side executor evidence contract for attempted/completed/failed actions
+- [x] authenticated executor callback boundary separate from the mobile client
+- [x] structured Waiting metadata with executor, action, external reference and optional re-check time
+- [x] reject model-generated Waiting when no structured external dependency exists
+- [x] external update clears Waiting and resumes the bounded runner
+- [x] execution/waiting production smoke harness ready for a deployed executor secret
 - [ ] test approval → resume and decline → alternate route on-device/API
-- [ ] add the first real execution adapter and executor evidence event
+- [ ] run execution/waiting smoke against production after deployment
+- [ ] add the first real execution adapter behind the executor contract
 
 ### Usability/reliability still to test
 
@@ -94,7 +101,7 @@ Roadmap alpha numbers describe capability stages; GitHub/Android build numbers a
 
 ### Still required before Alpha 2 is genuinely complete
 
-- [ ] robust `waiting` behaviour for real external dependencies
+- [x] robust `waiting` behaviour for real external dependencies
 - [ ] notifications only for genuine hand-backs
 - [ ] stronger outcome verification/completion semantics
 - [ ] evaluation for interruption rate, human touches and time-to-first-useful-action
@@ -106,7 +113,7 @@ Golden paths:
 - purchase → requirements → shortlist → recommendation
 - correction → edit brief → Carry re-plans from the corrected intent
 - completion → user marks done → gives feedback → future similar case can use that explicit signal
-- consequential action → Carry prepares → asks once → approve/decline event → execute only through a capable adapter → verify
+- consequential action → Carry prepares → asks once → approve/decline event → executor attempted/completed evidence → Waiting where needed → external update → verify
 
 **Exit:** several different real-life cases can be handed to Carry and materially advanced with low user effort, clear evidence, safe hand-backs and no fake agency; users remain in control of the case lifecycle.
 

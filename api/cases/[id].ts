@@ -61,6 +61,24 @@ function normalisePreparedAction(value: unknown) {
   return { label, subject, body };
 }
 
+function normaliseWaiting(value: unknown) {
+  if (!value || typeof value !== 'object') return undefined;
+  const waiting = value as Record<string, unknown>;
+  const reason = typeof waiting.reason === 'string' ? waiting.reason.trim() : '';
+  if (!reason) return undefined;
+  const optionalString = (key: string) => typeof waiting[key] === 'string' && String(waiting[key]).trim()
+    ? String(waiting[key]).trim()
+    : undefined;
+  return {
+    reason,
+    executor: optionalString('executor'),
+    action: optionalString('action'),
+    externalRef: optionalString('externalRef'),
+    since: optionalString('since'),
+    checkAfter: optionalString('checkAfter'),
+  };
+}
+
 function resultKindFrom(value: unknown, options: ReturnType<typeof normaliseOptions>) {
   if (value === 'summary' || value === 'shortlist' || value === 'comparison' || value === 'answer') return value;
   return options.length > 0 ? 'shortlist' : 'summary';
@@ -99,7 +117,7 @@ export async function GET(request: Request) {
   const sql = getSql();
 
   const [item] = await sql`
-    SELECT id, title, outcome, summary, state, domain, space_key, source_text, next_action, decision, plan, created_at, updated_at
+    SELECT id, title, outcome, summary, state, domain, space_key, source_text, next_action, decision, waiting, plan, created_at, updated_at
     FROM carry_cases
     WHERE id = ${id}::uuid AND owner_key = ${ownerKey}
     LIMIT 1
@@ -156,6 +174,7 @@ export async function GET(request: Request) {
     nextAction: item.next_action,
     decisionLabel: item.decision?.label ?? undefined,
     decisionInput: decisionInputFrom(item.decision, item.next_action, item.domain),
+    waiting: normaliseWaiting(item.waiting),
     plan: item.plan ?? [],
     evidence,
     feedback,
