@@ -91,7 +91,7 @@ export async function recordExecutionLifecycleEvent(
     await sql`
       UPDATE carry_cases
       SET state = 'carrying', waiting = null,
-          next_action = ${`The external action failed: ${input.summary}`}, updated_at = now()
+          next_action = ${`The external action failed: ${input.summary}. Retry when ready.`}, updated_at = now()
       WHERE id = ${caseId}::uuid AND owner_key = ${ownerKey}
     `;
     return { caseId, state: 'carrying', shouldAdvance: true };
