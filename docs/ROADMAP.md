@@ -1,12 +1,12 @@
 # Carry — roadmap
 
-## Current focus — Android Alpha #6: manage, finish and teach Carry
+## Current focus — Android Alpha #6: finish the Alpha 2 hand-back loop
 
 The working-alpha backend gate has passed and real on-device service/repair tests have proved the core loop: Carry can understand a problem, use location, research relevant options and turn that research into an actionable recommendation with verified contact routes and a prepared next step.
 
-The next gap is basic case ownership. A user must be able to correct a case, finish it and remove it without fighting the agent. Those actions are also valuable learning signals: Carry should know when its interpretation was edited, when the user says the outcome is complete, and whether it handled the case well.
+CRUD and explicit completion feedback are now implemented. The current build slice moves beyond generic `needs_user` prompts: Carry has a first-class consequence-based approval hand-back, distinct approve/decline events, calmer four-state case UX and optimistic hand-back transitions.
 
-The immediate priority is therefore **case management + the first explicit learning loop**. Deeper preference learning remains a later evaluation/learning phase; this slice records explicit feedback and makes it available as soft context for future cases without pretending the model has permanently retrained itself.
+This is deliberately an **approval boundary, not fake agency**. Approval means Carry is authorised to attempt one specific consequential action; it is not evidence that the action happened. Until an execution adapter exists for that action, Carry must keep the final human step honest and precise.
 
 Roadmap alpha numbers describe capability stages; GitHub/Android build numbers are build artefacts.
 
@@ -32,11 +32,11 @@ Roadmap alpha numbers describe capability stages; GitHub/Android build numbers a
 - [x] case created immediately after capture
 - [x] first bounded orchestration run
 - [x] visible fallback/failure state rather than pretending understanding succeeded
-- [ ] local optimistic UI while server work continues
+- [ ] local optimistic UI while server work continues outside case hand-backs
 
 **Golden path:** “My gutter is blocked” → useful household case with sensible next actions.
 
-**Status:** backend/capture contract complete enough for working alpha; optimistic mobile polish remains.
+**Status:** backend/capture contract complete enough for working alpha; capture optimistic polish remains.
 
 ## Alpha 2 — Carry actually carries
 
@@ -59,7 +59,7 @@ Roadmap alpha numbers describe capability stages; GitHub/Android build numbers a
 - [x] raw sources collapsed behind evidence disclosure
 - [x] production actionable-results gate across gutter/purchase/admin recipes
 
-### Case ownership — current
+### Case ownership and learning
 
 - [x] edit/rename a case
 - [x] changing the underlying brief re-understands the case and automatically resumes Carry
@@ -73,18 +73,27 @@ Roadmap alpha numbers describe capability stages; GitHub/Android build numbers a
 - [ ] test complete → feedback → later similar case on-device
 - [ ] test delete and completed-case behaviour on-device
 
+### Hand-backs and action safety — current
+
+- [x] four explicit user-facing states: Needs you / Carrying / Waiting / Done
+- [x] calm state surface instead of generic working copy
+- [x] optimistic UI when a hand-back is answered, a failed run is retried or a case is manually completed
+- [x] explicit approval decision input for consequential external actions
+- [x] distinct `approval_granted` and `approval_declined` events
+- [x] consequence policy documented: approval is scoped authorisation, never proof of execution
+- [x] runner told not to request approval when no execution capability exists
+- [ ] test approval → resume and decline → alternate route on-device/API
+- [ ] add the first real execution adapter and executor evidence event
+
 ### Usability/reliability still to test
 
 - [ ] gutter case with location permission denied → pin/postcode fallback still works
 - [ ] repeat at least one complete flow through voice
 - [ ] deliberately exercise failure + retry on-device
-- [ ] tighten Working / Waiting / Needs you / Done language and visual hierarchy
-- [ ] reduce unnecessary human touches and generic progress copy
-- [ ] add optimistic UI where it materially improves perceived responsiveness
+- [ ] reduce unnecessary human touches beyond the current hand-back improvements
 
 ### Still required before Alpha 2 is genuinely complete
 
-- [ ] consequence-based approval policy for consequential external actions
 - [ ] robust `waiting` behaviour for real external dependencies
 - [ ] notifications only for genuine hand-backs
 - [ ] stronger outcome verification/completion semantics
@@ -93,10 +102,11 @@ Roadmap alpha numbers describe capability stages; GitHub/Android build numbers a
 Golden paths:
 
 - gutter problem → research local options → concise recommendation → verified contact route → booking/enquiry boundary
-- MOT → determine due state → shortlist/book with approval
+- MOT → determine due state → shortlist/book with approval when an executor exists
 - purchase → requirements → shortlist → recommendation
 - correction → edit brief → Carry re-plans from the corrected intent
 - completion → user marks done → gives feedback → future similar case can use that explicit signal
+- consequential action → Carry prepares → asks once → approve/decline event → execute only through a capable adapter → verify
 
 **Exit:** several different real-life cases can be handed to Carry and materially advanced with low user effort, clear evidence, safe hand-backs and no fake agency; users remain in control of the case lifecycle.
 
