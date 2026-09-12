@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { getSql } from './db.js';
 import { recordExecutionLifecycleEvent } from './execution-lifecycle.js';
+import { gmailConfigured, sendGmailMessage } from './gmail-client.js';
 
 const emailExecutionSchema = z.object({
   capability: z.literal('email.send'),
@@ -13,25 +14,16 @@ const emailExecutionSchema = z.object({
 
 export type EmailExecutionIntent = z.infer<typeof emailExecutionSchema>;
 
-type GmailSendResult = {
-  id: string;
-  threadId: string;
-};
-
 export function gmailEmailConfigured() {
-  return Boolean(
-    process.env.CARRY_GMAIL_CLIENT_ID?.trim()
-    && process.env.CARRY_GMAIL_CLIENT_SECRET?.trim()
-    && process.env.CARRY_GMAIL_REFRESH_TOKEN?.trim(),
-  );
+  return gmailConfigured();
 }
 
 export function configuredExecutionCapabilities() {
-  return gmailEmailConfigured() ? ['email.send'] : [];
+  return gmailConfigured() ? ['email.send'] : [];
 }
 
 function emailIntentFromActionPayload(value: unknown): EmailExecutionIntent | null {
-  if (!gmailEmailConfigured() || !value || typeof value !== 'object') return null;
+  if (!gmailConfigured() || !value || typeof value !== 'object') return null;
   const payload = value as Record<string, unknown>;
   const prepared = payload.preparedAction && typeof payload.preparedAction === 'object'
     ? payload.preparedAction as Record<string, unknown>
@@ -72,7 +64,7 @@ function emailIntentFromActionPayload(value: unknown): EmailExecutionIntent | nu
 }
 
 export async function getCaseEmailExecutionIntent(caseId: string, ownerKey: string) {
-  if (!gmailEmailConfigured()) return null;
+  if (!gmailConfigured()) return null;
   const sql = getSql();
   const events = await sql`
     SELECT payload
@@ -97,73 +89,6 @@ export async function getCaseEmailExecutionIntent(caseId: string, ownerKey: stri
   return null;
 }
 
-function base64Url(value: string) {
-  return Buffer.from(value, 'utf8')
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/g, '');
-}
-
-function encodeHeader(value: string) {
-  return /[^\x20-\x7E]/.test(value)
-    ? `=?UTF-8?B?${Buffer.from(value, 'utf8').toString('base64')}?=`
-    : value;
-}
-
-function gmailRawMessage(intent: EmailExecutionIntent) {
-  const from = process.env.CARRY_GMAIL_FROM?.trim();
-  const headers = [
-    ...(from ? [`From: ${from}`] : []),
-    `To: ${intent.to}`,
-    `Subject: ${encodeHeader(intent.subject)}`,
-    'MIME-Version: 1.0',
-    'Content-Type: text/plain; charset="UTF-8"',
-    'Content-Transfer-Encoding: 8bit',
-  ];
-  return base64Url(`${headers.join('\r\n')}\r\n\r\n${intent.body}\r\n`);
-}
-
-async function gmailAccessToken() {
-  const clientId = process.env.CARRY_GMAIL_CLIENT_ID?.trim();
-  const clientSecret = process.env.CARRY_GMAIL_CLIENT_SECRET?.trim();
-  const refreshToken = process.env.CARRY_GMAIL_REFRESH_TOKEN?.trim();
-  if (!clientId || !clientSecret || !refreshToken) throw new Error('Gmail executor is not configured');
-
-  const response = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: refreshToken,
-      grant_type: 'refresh_token',
-    }),
-  });
-  const payload = await response.json() as { access_token?: string; error?: string; error_description?: string };
-  if (!response.ok || !payload.access_token) {
-    throw new Error(`Gmail token refresh failed: ${payload.error_description || payload.error || response.status}`);
-  }
-  return payload.access_token;
-}
-
-async function sendWithGmail(intent: EmailExecutionIntent): Promise<GmailSendResult> {
-  const accessToken = await gmailAccessToken();
-  const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${accessToken}`,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({ raw: gmailRawMessage(intent) }),
-  });
-  const payload = await response.json() as { id?: string; threadId?: string; error?: { message?: string } };
-  if (!response.ok || !payload.id || !payload.threadId) {
-    throw new Error(`Gmail send failed: ${payload.error?.message || response.status}`);
-  }
-  return { id: payload.id, threadId: payload.threadId };
-}
-
 export function parseEmailExecutionIntent(value: unknown) {
   const parsed = emailExecutionSchema.safeParse(value);
   return parsed.success ? parsed.data : null;
@@ -180,7 +105,7 @@ export async function executeApprovedEmail(caseId: string, ownerKey: string, raw
   });
 
   try {
-    const sent = await sendWithGmail(intent);
+    const sent = await sendGmailMessage(intent);
     const externalRef = `gmail:${sent.threadId}:${sent.id}`;
     const lifecycle = await recordExecutionLifecycleEvent(caseId, ownerKey, {
       status: 'completed',
