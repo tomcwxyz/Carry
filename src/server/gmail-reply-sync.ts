@@ -20,8 +20,10 @@ type WaitingCase = {
 function parseExternalRef(value: unknown) {
   if (typeof value !== 'string') return null;
   const match = /^gmail:([^:]+):([^:]+)$/.exec(value.trim());
-  if (!match) return null;
-  return { threadId: match[1], sentMessageId: match[2] };
+  const threadId = match?.[1];
+  const sentMessageId = match?.[2];
+  if (!threadId || !sentMessageId) return null;
+  return { threadId, sentMessageId };
 }
 
 function incomingAfterSent(messages: GmailMessage[], sentMessageId: string, since?: string) {
