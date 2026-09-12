@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { advanceCase } from '../../../src/server/case-advance.js';
 import { completeCaseByUser } from '../../../src/server/case-completion.js';
 import { getSql } from '../../../src/server/db.js';
+import { executeApprovedEmail, getCaseEmailExecutionIntent } from '../../../src/server/email-executor.js';
 
 export const maxDuration = 60;
 
@@ -76,7 +77,11 @@ export async function POST(request: Request) {
   `;
   if (!current) return Response.json({ error: 'Case not found' }, { status: 404 });
 
-  const expectedInput = decisionInputKind(current.decision);
+  const storedInput = decisionInputKind(current.decision);
+  const emailIntent = current.state === 'needs_user' && storedInput === 'text'
+    ? await getCaseEmailExecutionIntent(caseId, ownerKey)
+    : null;
+  const expectedInput = emailIntent ? 'approval' : storedInput;
   const { location, approval, completion } = parsed.data;
   const extraText = parsed.data.text?.trim() ?? '';
 
@@ -102,19 +107,22 @@ export async function POST(request: Request) {
     });
   }
 
+  const approvalTarget = emailIntent ? `send email to ${emailIntent.to}` : decisionLabel(current.decision) || 'the proposed action';
   const approvalText = approval === 'approve'
-    ? `User explicitly approved: ${decisionLabel(current.decision) || 'the proposed action'}`
+    ? `User explicitly approved: ${approvalTarget}`
     : approval === 'decline'
-      ? `User declined: ${decisionLabel(current.decision) || 'the proposed action'}`
+      ? `User declined: ${approvalTarget}`
       : '';
   const completionText = completion === 'not_yet' ? 'User confirmed the outcome is not complete yet' : '';
   const text = [location ? locationText(location) : '', approvalText, completionText, extraText].filter(Boolean).join('. ');
 
   const nextAction = approval === 'decline'
     ? 'Carry is finding a different route that respects your decision.'
-    : completion === 'not_yet'
-      ? 'Carry is continuing because the outcome is not complete yet.'
-      : 'Carry is continuing with the information you supplied.';
+    : approval === 'approve' && emailIntent
+      ? `Carry is sending the approved email to ${emailIntent.to}.`
+      : completion === 'not_yet'
+        ? 'Carry is continuing because the outcome is not complete yet.'
+        : 'Carry is continuing with the information you supplied.';
 
   await sql`
     UPDATE carry_cases
@@ -136,6 +144,13 @@ export async function POST(request: Request) {
     text,
     approval,
     decision: current.decision ?? null,
+    execution: emailIntent ? {
+      capability: emailIntent.capability,
+      provider: emailIntent.provider,
+      to: emailIntent.to,
+      subject: emailIntent.subject,
+      body: emailIntent.body,
+    } : undefined,
   } : completion ? {
     text,
     completion,
@@ -150,9 +165,9 @@ export async function POST(request: Request) {
         ? 'completion_not_confirmed'
         : 'decision_made';
   const eventLabel = approval === 'approve'
-    ? `Approved: ${decisionLabel(current.decision) || 'Carry action'}`
+    ? `Approved: ${approvalTarget}`
     : approval === 'decline'
-      ? `Declined: ${decisionLabel(current.decision) || 'Carry action'}`
+      ? `Declined: ${approvalTarget}`
       : completion === 'not_yet'
         ? 'Confirmed this outcome is not complete yet'
         : location
@@ -163,6 +178,23 @@ export async function POST(request: Request) {
     INSERT INTO carry_case_events (case_id, type, actor, label, payload)
     VALUES (${caseId}::uuid, ${eventType}, 'you', ${eventLabel}, ${JSON.stringify(eventPayload)}::jsonb)
   `;
+
+  if (approval === 'approve' && emailIntent) {
+    const execution = await executeApprovedEmail(caseId, ownerKey, emailIntent);
+    if (execution.ok) {
+      return Response.json({
+        caseId,
+        execution,
+        result: { kind: 'waiting', nextAction: `Waiting for a reply to “${emailIntent.subject}”.` },
+      });
+    }
+    return Response.json({
+      error: `The approval was saved, but the email could not be sent: ${execution.error}`,
+      caseId,
+      saved: true,
+      execution,
+    }, { status: 502 });
+  }
 
   try {
     const result = await advanceCase(caseId, ownerKey);
