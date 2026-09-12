@@ -70,6 +70,7 @@ function decisionInputFrom(value: unknown, nextAction: unknown, domain: unknown)
   if (!value || typeof value !== 'object') return undefined;
   const decision = value as Record<string, unknown>;
 
+  if (decision.inputKind === 'approval') return { kind: 'approval', askRadius: false } as const;
   if (decision.inputKind === 'location') return { kind: 'location', askRadius: decision.askRadius === true } as const;
   if (decision.inputKind === 'text') return { kind: 'text', askRadius: false } as const;
 
