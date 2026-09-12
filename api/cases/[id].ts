@@ -2,6 +2,7 @@ import { advanceCase } from '../../src/server/case-advance.js';
 import { understandCase } from '../../src/server/case-understanding.js';
 import { formatLearningSignals, getOwnerLearningSignals } from '../../src/server/case-learning.js';
 import { getSql } from '../../src/server/db.js';
+import { getCaseEmailExecutionIntent } from '../../src/server/email-executor.js';
 
 function normaliseSources(value: unknown) {
   if (!Array.isArray(value)) return [];
@@ -163,6 +164,13 @@ export async function GET(request: Request) {
     note: typeof feedbackPayload?.note === 'string' && feedbackPayload.note.trim() ? feedbackPayload.note.trim() : undefined,
   } : undefined;
 
+  const storedDecisionInput = decisionInputFrom(item.decision, item.next_action, item.domain);
+  const emailIntent = item.state === 'needs_user' && storedDecisionInput?.kind === 'text'
+    ? await getCaseEmailExecutionIntent(id, ownerKey)
+    : null;
+  const decisionInput = emailIntent ? { kind: 'approval' as const, askRadius: false } : storedDecisionInput;
+  const decisionLabel = emailIntent ? `Send this email to ${emailIntent.to}?` : item.decision?.label ?? undefined;
+
   return Response.json({
     id: item.id,
     title: item.title,
@@ -173,8 +181,8 @@ export async function GET(request: Request) {
     space: item.space_key === 'personal' ? 'Personal' : item.space_key,
     sourceText: item.source_text ?? '',
     nextAction: item.next_action,
-    decisionLabel: item.decision?.label ?? undefined,
-    decisionInput: decisionInputFrom(item.decision, item.next_action, item.domain),
+    decisionLabel,
+    decisionInput,
     waiting: normaliseWaiting(item.waiting),
     plan: item.plan ?? [],
     evidence,
