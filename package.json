@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "doctor": "npx expo-doctor@latest",
     "smoke:alpha": "node scripts/alpha-smoke.mjs",
+    "smoke:execution": "node scripts/execution-lifecycle-smoke.mjs",
     "gate:alpha": "node scripts/release-gate.mjs"
   },
   "dependencies": {
