@@ -97,7 +97,8 @@ Never claim that Carry booked, bought, sent, called or otherwise acted externall
 For household services and repairs, once location/building details are available, research a small provider shortlist rather than asking the user to do the research. Research should include usable contact routes where evidence supports them.
 For purchases, once requirements are adequate, research options rather than asking the user to browse.
 If a recent action_completed event already contains a grounded shortlist and prepared contact action, do not research the same thing again. Stop at the human/consequential boundary and make the next action precise.
-When kind=needs_user, decisionInput tells the mobile app how to collect the blocking input. Use kind=location only when the user's current/place location is genuinely the missing information. Set askRadius=true only when Carry will search for nearby providers, places or options and the distance matters. For choices, dates, building details or other facts use kind=text. For every other kind, decisionLabel and decisionInput must be null.
+When kind=needs_user, decisionInput tells the mobile app how to collect the blocking input. Use kind=location only when the user's current/place location is genuinely the missing information. Set askRadius=true only when Carry will search for nearby providers, places or options and the distance matters. Use kind=approval only when Carry is genuinely ready to take one specific consequential external action itself and has an execution capability for that action. Consequential actions include sending or publishing something, making/changing/cancelling a booking, committing money or a purchase, deleting/modifying an external record, changing permissions, or another externally visible or hard-to-reverse side effect. Do not use approval for ordinary facts, preferences, research choices, or actions the user must physically carry out themselves. For every other blocking fact use kind=text. For every non-needs_user result, decisionLabel and decisionInput must be null.
+An approval_granted event authorises only the exact proposed action recorded in that event. Approval is not evidence that the action happened. Never move to waiting or done merely because approval was granted; require a later executor/tool event showing the external action actually occurred. If no executor exists for an approved action, say so honestly and hand back the minimum necessary human step rather than pretending it ran.
 Recent explicit user feedback may be supplied in the case context. Treat it as soft working preferences only when relevant, especially notes about over-researching, unnecessary interruptions, poor hand-backs or missing action. Do not overgeneralise from unrelated domains and never treat it as factual evidence for the current case.
 Keep every field terse. Keep the plan small, ordered and honest. Unless the case is done, exactly one plan step should be active. Earlier completed steps should be done and later steps should be todo.`;
 
@@ -215,8 +216,8 @@ Keep resultBody to a short orientation paragraph; put option-specific detail int
 When the case contains enough information to prepare the next enquiry, quote request or call brief, populate preparedAction with a short label, optional subject and ready-to-use body. Preparing text is safe autonomous work: do it without asking permission. preparedAction does not mean anything has been sent.
 Do not invent ratings, prices, availability, contact details or actions. Distinguish indicative local price guides from provider-specific prices.
 Never claim an external booking, purchase, message or call occurred.
-If the next step is an unavoidable human or consequential external action, use kind=needs_user and make nextAction concrete, e.g. contact the recommended provider using the verified route below. The mobile UI can surface contact buttons, so do not ask the user to search for contact details themselves.
-If kind=needs_user, decisionInput kind=location only if a location is still genuinely missing. Otherwise use kind=text. For non-needs_user results, decisionLabel and decisionInput must be null.
+If the next step is an unavoidable human or consequential external action, use kind=needs_user and make nextAction concrete. Use decisionInput.kind=approval only when the case context proves Carry has an execution capability for the exact proposed external action. Otherwise use kind=text and make the human hand-back precise; opening a phone, mail or contact-form route is not the same as Carry sending or booking something itself.
+If kind=needs_user, decisionInput kind=location only if a location is still genuinely missing. For non-needs_user results, decisionLabel and decisionInput must be null.
 Unless the case is done, return exactly one active plan step.`,
     input: `CASE\n${snapshotText(snapshot)}\n\nRESEARCH\n${research.text}\n\nSOURCES\n${sourceList || 'No source URLs were returned.'}`,
     max_output_tokens: 3600,
@@ -284,8 +285,9 @@ function stateFor(kind: AppliedKind) {
 function storedDecisionInput(value: unknown): DecisionInput {
   if (!value || typeof value !== 'object') return { kind: 'text', askRadius: false };
   const decision = value as Record<string, unknown>;
-  if (decision.inputKind !== 'location') return { kind: 'text', askRadius: false };
-  return { kind: 'location', askRadius: decision.askRadius === true };
+  if (decision.inputKind === 'approval') return { kind: 'approval', askRadius: false };
+  if (decision.inputKind === 'location') return { kind: 'location', askRadius: decision.askRadius === true };
+  return { kind: 'text', askRadius: false };
 }
 
 async function applyResult(
