@@ -93,6 +93,15 @@ export interface CaseFeedback {
   note?: string;
 }
 
+export interface CaseWaiting {
+  reason: string;
+  executor?: string;
+  action?: string;
+  externalRef?: string;
+  since?: string;
+  checkAfter?: string;
+}
+
 export interface CarryCase {
   id: string;
   title: string;
@@ -105,6 +114,7 @@ export interface CarryCase {
   nextAction?: string;
   decisionLabel?: string;
   decisionInput?: CaseDecisionInput;
+  waiting?: CaseWaiting;
   plan: PlanStep[];
   activity: CaseEvent[];
   evidence: CaseEvidence[];
