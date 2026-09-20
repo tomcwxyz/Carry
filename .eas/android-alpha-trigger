@@ -1,2 +1,2 @@
-triggered: 2026-09-11T07:50:00+01:00
-reason: CRUD and explicit feedback gates passed; release edit/resume, completion, deletion and learning-feedback UI for device testing
+triggered: 2026-09-20T20:25:00+01:00
+reason: Alpha 7 calibration build; include current Alpha 2 approvals, execution evidence, Waiting/resume, outcome verification, CRUD/feedback and Gmail executor for physical acceptance testing
