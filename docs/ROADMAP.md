@@ -1,14 +1,18 @@
 # Carry — roadmap
 
-## Current focus — Android Alpha #6: finish the Alpha 2 hand-back loop
+## Current focus — Android Alpha #7: prove the complete Alpha 2 loop
 
-The working-alpha backend gate has passed and real on-device service/repair tests have proved the core loop: Carry can understand a problem, use location, research relevant options and turn that research into an actionable recommendation with verified contact routes and a prepared next step.
+The architecture is now ahead of the device evidence. The working-alpha backend gate has passed, real on-device service/repair tests have proved research and actionable recommendations, and the full execution contract is implemented: scoped approval, explicit execution evidence, evidence-backed Waiting, external resume and trusted completion verification.
 
-CRUD, explicit completion feedback, consequence-based approvals, evidence-backed Waiting and outcome verification are now implemented. Carry distinguishes what the model believes from what actually happened: approval is permission, execution evidence proves an external side effect, Waiting requires a real dependency, and Done requires confirmation or trusted verification.
+Gmail is the first real executor. When Carry has a verified email contact and a prepared message, it can ask for approval of the exact send, record Gmail message/thread evidence, enter Waiting and resume when a reply is detected. Production is deployed on the current executor code and the scheduled Gmail sync route is running every 15 minutes without observed runtime errors; the credentials/executor path still needs an end-to-end production proof rather than being assumed from cron health alone.
 
-The first real executor is now implemented behind that contract: when Carry has a verified email contact and prepared message, a configured Gmail mailbox can send the exact approved message, record Gmail message/thread evidence, enter Waiting and resume when a reply is detected.
+**Alpha 7 is a calibration build, not an expansion build.** Its job is to answer one question:
 
-The remaining Alpha 2 work is therefore mostly proving the loop on-device, reducing interruptions, adding hand-back-only notifications and measuring whether Carry actually reduces human effort.
+> Does Carry materially move a real thing towards completion with less attention from the user than doing it themselves?
+
+Before starting broader Alpha 3 connector work, use the acceptance gate in `docs/ALPHA7_ACCEPTANCE.md` to exercise the current surfaces on a physical device, count human touches, and find unnecessary interruptions or fake agency.
+
+The remaining Alpha 2 work is therefore: prove the executor loop end-to-end, make the current on-device interactions feel good, add hand-back-only notifications, and instrument outcome/effort metrics.
 
 Roadmap alpha numbers describe capability stages; GitHub/Android build numbers are build artefacts.
 
