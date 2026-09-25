@@ -3,6 +3,7 @@ import { fallbackCase, understandCase } from '../src/server/case-understanding.j
 import { formatLearningSignals, getOwnerLearningSignals } from '../src/server/case-learning.js';
 import { getSql } from '../src/server/db.js';
 import { routeControlInput } from '../src/server/control-router.js';
+import { notifyCaseNeedsUser } from '../src/server/push-notifications.js';
 
 export const maxDuration = 60;
 
@@ -182,6 +183,7 @@ export async function POST(request: Request) {
           ${JSON.stringify({ inputKind: decision?.inputKind ?? 'text', askRadius: decision?.askRadius ?? false })}::jsonb
         )
       `;
+      await notifyCaseNeedsUser(String(created.id), ownerKey);
     }
 
     await sql`
