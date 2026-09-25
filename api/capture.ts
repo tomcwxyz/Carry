@@ -89,13 +89,18 @@ export async function POST(request: Request) {
       ORDER BY updated_at DESC
       LIMIT 30
     `;
-    const route = await routeControlInput(sourceText, activeCases.map((item) => ({
-      id: String(item.id),
-      title: String(item.title),
-      summary: String(item.summary),
-      state: String(item.state),
-      nextAction: item.next_action ? String(item.next_action) : null,
-    })));
+    let route: Awaited<ReturnType<typeof routeControlInput>> = { kind: 'new_case', caseId: null, message: null };
+    try {
+      route = await routeControlInput(sourceText, activeCases.map((item) => ({
+        id: String(item.id),
+        title: String(item.title),
+        summary: String(item.summary),
+        state: String(item.state),
+        nextAction: item.next_action ? String(item.next_action) : null,
+      })));
+    } catch (error) {
+      console.warn('control_routing_failed_open', { error });
+    }
 
     if (route.kind === 'status_query') {
       await sql`
