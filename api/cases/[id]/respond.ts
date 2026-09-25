@@ -126,7 +126,7 @@ export async function POST(request: Request) {
 
   await sql`
     UPDATE carry_cases
-    SET state = 'carrying', decision = null, next_action = ${nextAction}, completed_at = null, updated_at = now()
+    SET state = 'carrying', decision = null, waiting = null, next_action = ${nextAction}, completed_at = null, updated_at = now()
     WHERE id = ${caseId}::uuid AND owner_key = ${ownerKey}
   `;
 
