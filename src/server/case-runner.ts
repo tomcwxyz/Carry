@@ -287,6 +287,7 @@ function storedDecisionInput(value: unknown): DecisionInput {
   if (!value || typeof value !== 'object') return { kind: 'text', askRadius: false };
   const decision = value as Record<string, unknown>;
   if (decision.inputKind === 'approval') return { kind: 'approval', askRadius: false };
+  if (decision.inputKind === 'completion') return { kind: 'completion', askRadius: false };
   if (decision.inputKind === 'location') return { kind: 'location', askRadius: decision.askRadius === true };
   return { kind: 'text', askRadius: false };
 }
