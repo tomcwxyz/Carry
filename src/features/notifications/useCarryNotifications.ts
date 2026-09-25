@@ -35,11 +35,12 @@ async function registerDevice() {
   if (!projectId) return;
 
   const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
-  await fetch(`${getApiBase()}/api/notifications/register`, {
+  const response = await fetch(`${getApiBase()}/api/notifications/register`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-carry-owner': 'alpha-local' },
     body: JSON.stringify({ token, platform: Platform.OS }),
   });
+  if (!response.ok) throw new Error(`Push registration failed with ${response.status}`);
 }
 
 function openNotification(notification: Notifications.Notification) {
