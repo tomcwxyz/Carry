@@ -3,6 +3,7 @@ import { understandCase } from '../../src/server/case-understanding.js';
 import { formatLearningSignals, getOwnerLearningSignals } from '../../src/server/case-learning.js';
 import { getSql } from '../../src/server/db.js';
 import { getCaseEmailExecutionIntent } from '../../src/server/email-executor.js';
+import { notifyCaseNeedsUser } from '../../src/server/push-notifications.js';
 
 function normaliseSources(value: unknown) {
   if (!Array.isArray(value)) return [];
@@ -305,6 +306,7 @@ export async function PATCH(request: Request) {
           ${JSON.stringify({ inputKind: decision?.inputKind ?? 'text', askRadius: decision?.askRadius ?? false })}::jsonb
         )
       `;
+      await notifyCaseNeedsUser(id, ownerKey);
       return Response.json({ caseId: id, changed: true, reran: true, result: { kind: 'needs_user' } });
     }
 
