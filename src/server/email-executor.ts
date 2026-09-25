@@ -14,6 +14,21 @@ const emailExecutionSchema = z.object({
 
 export type EmailExecutionIntent = z.infer<typeof emailExecutionSchema>;
 
+function addWorkingDays(date: Date, days: number) {
+  const result = new Date(date);
+  let remaining = days;
+  while (remaining > 0) {
+    result.setUTCDate(result.getUTCDate() + 1);
+    const day = result.getUTCDay();
+    if (day !== 0 && day !== 6) remaining -= 1;
+  }
+  return result;
+}
+
+function defaultReplyCheckAfter() {
+  return addWorkingDays(new Date(), 2).toISOString();
+}
+
 export function gmailEmailConfigured() {
   return gmailConfigured();
 }
@@ -125,6 +140,7 @@ export async function executeApprovedEmail(caseId: string, ownerKey: string, raw
       summary: `Email sent to ${intent.to}`,
       externalRef,
       waitingFor: `Waiting for a reply to “${intent.subject}”.`,
+      checkAfter: defaultReplyCheckAfter(),
       metadata: {
         to: intent.to,
         subject: intent.subject,
