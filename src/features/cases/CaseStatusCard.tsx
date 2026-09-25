@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { colours, radius, spacing } from '../../theme/tokens';
-import type { CaseState } from './types';
+import type { CaseState, CaseWaiting } from './types';
 
 const copy: Record<CaseState, { eyebrow: string; title: string; helper: string }> = {
   needs_user: {
@@ -26,14 +26,37 @@ const copy: Record<CaseState, { eyebrow: string; title: string; helper: string }
   },
 };
 
-export function CaseStatusCard({ state, nextAction, busy = false }: { state: CaseState; nextAction?: string; busy?: boolean }) {
+function waitingDetail(waiting?: CaseWaiting) {
+  if (!waiting) return undefined;
+  if (waiting.checkAfter) {
+    const when = new Date(waiting.checkAfter);
+    if (!Number.isNaN(when.getTime())) {
+      return `${waiting.reason} Carry will check again ${when.toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}.`;
+    }
+  }
+  return waiting.reason;
+}
+
+export function CaseStatusCard({
+  state,
+  nextAction,
+  waiting,
+  busy = false,
+}: {
+  state: CaseState;
+  nextAction?: string;
+  waiting?: CaseWaiting;
+  busy?: boolean;
+}) {
   const stateCopy = copy[state];
 
   return (
     <View style={[styles.card, state === 'needs_user' && styles.needsYou, state === 'done' && styles.done]}>
       <Text style={styles.eyebrow}>{busy ? 'CARRYING' : stateCopy.eyebrow}</Text>
       <Text style={styles.title}>{busy ? 'Carry is picking this back up' : stateCopy.title}</Text>
-      {nextAction ? <Text style={styles.next}>{nextAction}</Text> : null}
+      {state === 'waiting' && waitingDetail(waiting)
+        ? <Text style={styles.next}>{waitingDetail(waiting)}</Text>
+        : nextAction ? <Text style={styles.next}>{nextAction}</Text> : null}
       <Text style={styles.helper}>{busy ? 'You can leave this screen while it continues.' : stateCopy.helper}</Text>
     </View>
   );

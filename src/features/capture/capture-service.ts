@@ -4,10 +4,23 @@ export type CaptureInput =
   | { kind: 'text'; text: string }
   | { kind: 'voice'; uri: string };
 
-export interface CaptureResult {
-  caseId: string;
-  degraded?: boolean;
-}
+export type CaptureResult =
+  | {
+      route?: 'new_case';
+      caseId: string;
+      degraded?: boolean;
+    }
+  | {
+      route: 'existing_case';
+      caseId: string;
+      routedText: string;
+      degraded?: boolean;
+    }
+  | {
+      route: 'status_query';
+      message: string;
+      degraded?: boolean;
+    };
 
 export async function submitCapture(input: CaptureInput): Promise<CaptureResult> {
   const endpoint = `${getApiBase()}/api/capture`;

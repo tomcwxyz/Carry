@@ -104,6 +104,23 @@ export interface CaseWaiting {
   checkAfter?: string;
 }
 
+export interface CaseApprovalAction {
+  capability: string;
+  provider?: string;
+  label: string;
+  to?: string;
+  subject?: string;
+  body?: string;
+}
+
+export interface CaseEffort {
+  humanHandbacks: number;
+  humanResponses: number;
+  autonomousActions: number;
+  externalActions: number;
+  timeToFirstUsefulActionMinutes?: number;
+}
+
 export interface CarryCase {
   id: string;
   title: string;
@@ -117,6 +134,8 @@ export interface CarryCase {
   decisionLabel?: string;
   decisionInput?: CaseDecisionInput;
   waiting?: CaseWaiting;
+  approvalAction?: CaseApprovalAction;
+  effort?: CaseEffort;
   plan: PlanStep[];
   activity: CaseEvent[];
   evidence: CaseEvidence[];

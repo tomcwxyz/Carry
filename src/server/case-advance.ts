@@ -1,5 +1,6 @@
 import { getSql } from './db.js';
 import { runCase, type CarryRunResult } from './case-runner.js';
+import { notifyCaseNeedsUser } from './push-notifications.js';
 
 async function hasStructuredWaiting(caseId: string, ownerKey: string) {
   const sql = getSql();
@@ -73,6 +74,7 @@ async function requestCompletionVerification(caseId: string, ownerKey: string): 
       ${JSON.stringify({ inputKind: 'completion', reason: 'Model-proposed completion requires trusted verification.' })}::jsonb
     )
   `;
+  await notifyCaseNeedsUser(caseId, ownerKey);
 
   return {
     kind: 'needs_user',

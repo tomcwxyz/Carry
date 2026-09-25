@@ -2,6 +2,8 @@ import { advanceCase } from '../src/server/case-advance.js';
 import { fallbackCase, understandCase } from '../src/server/case-understanding.js';
 import { formatLearningSignals, getOwnerLearningSignals } from '../src/server/case-learning.js';
 import { getSql } from '../src/server/db.js';
+import { routeControlInput } from '../src/server/control-router.js';
+import { notifyCaseNeedsUser } from '../src/server/push-notifications.js';
 
 export const maxDuration = 60;
 
@@ -80,6 +82,50 @@ export async function POST(request: Request) {
     `;
     if (!capture?.id) throw new Error('Carry could not persist the capture');
 
+    const activeCases = await sql`
+      SELECT id, title, summary, state, next_action
+      FROM carry_cases
+      WHERE owner_key = ${ownerKey} AND state <> 'done'
+      ORDER BY updated_at DESC
+      LIMIT 30
+    `;
+    let route: Awaited<ReturnType<typeof routeControlInput>> = { kind: 'new_case', caseId: null, message: null };
+    try {
+      route = await routeControlInput(sourceText, activeCases.map((item) => ({
+        id: String(item.id),
+        title: String(item.title),
+        summary: String(item.summary),
+        state: String(item.state),
+        nextAction: item.next_action ? String(item.next_action) : null,
+      })));
+    } catch (error) {
+      console.warn('control_routing_failed_open', { error });
+    }
+
+    if (route.kind === 'status_query') {
+      await sql`
+        UPDATE carry_captures
+        SET status = 'understood', metadata = ${JSON.stringify({ route: 'status_query' })}::jsonb, updated_at = now()
+        WHERE id = ${capture.id}
+      `;
+      return Response.json({ route: 'status_query', message: route.message, degraded: false });
+    }
+
+    if (route.kind === 'existing_case' && route.caseId) {
+      await sql`
+        UPDATE carry_captures
+        SET status = 'understood', case_id = ${route.caseId}::uuid,
+            metadata = ${JSON.stringify({ route: 'existing_case' })}::jsonb, updated_at = now()
+        WHERE id = ${capture.id}
+      `;
+      return Response.json({
+        route: 'existing_case',
+        caseId: route.caseId,
+        routedText: sourceText,
+        degraded: false,
+      });
+    }
+
     let understood;
     let understandingFailed = false;
     let understandingError: string | null = null;
@@ -142,6 +188,7 @@ export async function POST(request: Request) {
           ${JSON.stringify({ inputKind: decision?.inputKind ?? 'text', askRadius: decision?.askRadius ?? false })}::jsonb
         )
       `;
+      await notifyCaseNeedsUser(String(created.id), ownerKey);
     }
 
     await sql`
