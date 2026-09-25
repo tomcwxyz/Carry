@@ -293,6 +293,7 @@ function storedDecisionInput(value: unknown): DecisionInput {
 
 async function applyResult(
   caseId: string,
+  ownerKey: string,
   result: Pick<NextStep, 'kind' | 'summary' | 'nextAction' | 'decisionLabel' | 'decisionInput' | 'plan'> | ResearchSynthesis,
 ) {
   if (result.kind === 'research') throw new Error('Research must be completed before applying a case result');
@@ -322,9 +323,7 @@ async function applyResult(
         ${JSON.stringify({ inputKind: decision?.inputKind ?? 'text', askRadius: decision?.askRadius ?? false })}::jsonb
       )
     `;
-    await notifyCaseNeedsUser(caseId, String((await sql`
-      SELECT owner_key FROM carry_cases WHERE id = ${caseId}::uuid LIMIT 1
-    `)[0]?.owner_key ?? 'alpha-local'));
+    await notifyCaseNeedsUser(caseId, ownerKey);
   } else if (kind === 'waiting') {
     await sql`
       INSERT INTO carry_case_events (case_id, type, actor, label, payload)
@@ -380,7 +379,7 @@ export async function runCase(caseId: string, ownerKey: string): Promise<CarryRu
     const next = await chooseNextStep(snapshot);
 
     if (next.kind !== 'research') {
-      await applyResult(caseId, next);
+      await applyResult(caseId, ownerKey, next);
       await sql`
         INSERT INTO carry_case_events (case_id, type, actor, label, payload)
         VALUES (${caseId}::uuid, 'action_completed', 'carry', ${next.summary}, ${JSON.stringify({ kind: next.kind })}::jsonb)
@@ -400,7 +399,7 @@ export async function runCase(caseId: string, ownerKey: string): Promise<CarryRu
     `;
 
     const synthesis = await synthesiseResearch(snapshot, research);
-    await applyResult(caseId, synthesis);
+    await applyResult(caseId, ownerKey, synthesis);
     await sql`
       INSERT INTO carry_case_events (case_id, type, actor, label, payload)
       VALUES (
