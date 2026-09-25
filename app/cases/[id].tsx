@@ -193,15 +193,6 @@ export default function CaseScreen() {
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-        {evidenceItems.length > 0 ? (
-          <View style={styles.block}>
-            <Text style={styles.blockTitle}>{hasRecommendation ? 'Carry recommends' : 'What Carry found'}</Text>
-            <View style={styles.evidenceList}>
-              {evidenceItems.map((evidence) => <ActionableResultCard key={evidence.id} evidence={evidence} />)}
-            </View>
-          </View>
-        ) : null}
-
         {needsDecision ? (
           <View style={styles.block}>
             <Text style={styles.blockTitle}>What Carry needs</Text>
@@ -230,6 +221,15 @@ export default function CaseScreen() {
                   onSubmit={(completion) => { void submitResponse({ completion }); }}
                 />
               ) : responseControls}
+            </View>
+          </View>
+        ) : null}
+
+        {evidenceItems.length > 0 ? (
+          <View style={styles.block}>
+            <Text style={styles.blockTitle}>{hasRecommendation ? 'Carry recommends' : 'What Carry found'}</Text>
+            <View style={styles.evidenceList}>
+              {evidenceItems.map((evidence) => <ActionableResultCard key={evidence.id} evidence={evidence} />)}
             </View>
           </View>
         ) : null}
