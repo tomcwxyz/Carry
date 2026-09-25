@@ -6,6 +6,7 @@ import { formatLearningSignals, getOwnerLearningSignals } from './case-learning.
 import { decisionInputJsonSchema, decisionInputSchema, normaliseDecisionInput, type DecisionInput } from './decision-input.js';
 import { getSql } from './db.js';
 import { createOpenAIResponse, getOpenAIOutputText } from './openai-response.js';
+import { notifyCaseNeedsUser } from './push-notifications.js';
 import { researchWeb, type ResearchResult } from './research-worker.js';
 
 const stepStateSchema = z.enum(['done', 'active', 'todo']);
@@ -321,6 +322,9 @@ async function applyResult(
         ${JSON.stringify({ inputKind: decision?.inputKind ?? 'text', askRadius: decision?.askRadius ?? false })}::jsonb
       )
     `;
+    await notifyCaseNeedsUser(caseId, String((await sql`
+      SELECT owner_key FROM carry_cases WHERE id = ${caseId}::uuid LIMIT 1
+    `)[0]?.owner_key ?? 'alpha-local'));
   } else if (kind === 'waiting') {
     await sql`
       INSERT INTO carry_case_events (case_id, type, actor, label, payload)
