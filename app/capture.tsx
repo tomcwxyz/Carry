@@ -4,6 +4,7 @@ import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput,
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { submitCapture } from '../src/features/capture/capture-service';
+import { respondToCase } from '../src/features/cases/case-service';
 import { VoiceCapture } from '../src/features/capture/VoiceCapture';
 import { colours, radius, spacing } from '../src/theme/tokens';
 
@@ -18,6 +19,14 @@ export default function CaptureScreen() {
     setMessage(null);
     try {
       const result = await submitCapture(input);
+      if (result.route === 'status_query') {
+        setMessage(result.message);
+        setRecordingUri(null);
+        return;
+      }
+      if (result.route === 'existing_case') {
+        await respondToCase(result.caseId, result.routedText);
+      }
       router.replace(`/cases/${result.caseId}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Carry could not process that.');
@@ -57,7 +66,7 @@ export default function CaptureScreen() {
             <Text style={styles.sendText}>→</Text>
           </Pressable>
         </View>
-        {message ? <Text style={styles.message}>{message}</Text> : null}
+        {message ? <View style={styles.answerCard}><Text style={styles.answerText}>{message}</Text></View> : null}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -70,5 +79,6 @@ const styles = StyleSheet.create({
   recorded: { alignItems: 'center', gap: spacing.sm, marginTop: spacing.lg }, recordedTitle: { color: colours.moss, fontSize: 13, fontWeight: '700' }, primaryButton: { backgroundColor: colours.ink, borderRadius: radius.pill, paddingHorizontal: spacing.lg, paddingVertical: 12 }, primaryText: { color: colours.white, fontWeight: '700' },
   orRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xl }, line: { height: 1, flex: 1, backgroundColor: colours.line }, or: { color: colours.muted, fontSize: 12 },
   textComposer: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm, backgroundColor: colours.surface, borderWidth: 1, borderColor: colours.line, borderRadius: radius.lg, padding: spacing.sm, marginTop: spacing.md }, input: { flex: 1, minHeight: 52, maxHeight: 120, color: colours.ink, fontSize: 16, lineHeight: 22, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm },
-  send: { width: 42, height: 42, borderRadius: 42, backgroundColor: colours.rust, alignItems: 'center', justifyContent: 'center' }, sendDisabled: { opacity: 0.35 }, sendText: { color: colours.white, fontSize: 22, fontWeight: '700' }, message: { color: colours.rust, fontSize: 13, lineHeight: 19, textAlign: 'center', marginTop: spacing.md },
+  send: { width: 42, height: 42, borderRadius: 42, backgroundColor: colours.rust, alignItems: 'center', justifyContent: 'center' }, sendDisabled: { opacity: 0.35 }, sendText: { color: colours.white, fontSize: 22, fontWeight: '700' }, answerCard: { backgroundColor: colours.surface, borderWidth: 1, borderColor: colours.line, borderRadius: radius.md, padding: spacing.md, marginTop: spacing.md },
+  answerText: { color: colours.ink, fontSize: 15, lineHeight: 21, textAlign: 'center' },
 });

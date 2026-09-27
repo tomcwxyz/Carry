@@ -6,8 +6,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomNav } from '../src/components/BottomNav';
 import { CaseCard } from '../src/components/CaseCard';
 import { VoiceButton } from '../src/components/VoiceButton';
-import { fetchCases } from '../src/features/cases/case-service';
-import type { CarryCase, CaseState } from '../src/features/cases/types';
+import { fetchCases, respondToCase } from '../src/features/cases/case-service';
+import { NeedsYouCard } from '../src/features/cases/NeedsYouCard';
+import type { CarryCase, CarryCaseApproval, CarryCaseCompletion, CaseState } from '../src/features/cases/types';
 import { colours, spacing } from '../src/theme/tokens';
 
 const sections: Array<{ state: CaseState; label: string; description: string }> = [
@@ -20,6 +21,12 @@ export default function NowScreen() {
   const [cases, setCases] = useState<CarryCase[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [workingId, setWorkingId] = useState<string | null>(null);
+
+  const loadCases = useCallback(async () => {
+    const loaded = await fetchCases();
+    setCases(loaded);
+  }, []);
 
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -30,6 +37,27 @@ export default function NowScreen() {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []));
+
+  async function answerCase(
+    item: CarryCase,
+    response: { approval: CarryCaseApproval } | { completion: CarryCaseCompletion },
+  ) {
+    if (workingId) return;
+    setWorkingId(item.id);
+    setError(null);
+    setCases((current) => current.map((candidate) => candidate.id === item.id
+      ? { ...candidate, state: 'carrying', decisionInput: undefined, decisionLabel: undefined, nextAction: 'Carry is picking this back up…' }
+      : candidate));
+    try {
+      await respondToCase(item.id, response);
+      await loadCases();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Carry could not continue that case');
+      await loadCases().catch(() => undefined);
+    } finally {
+      setWorkingId(null);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -66,7 +94,16 @@ export default function NowScreen() {
                 </View>
                 <Text style={styles.sectionDescription}>{section.description}</Text>
                 <View style={styles.list}>
-                  {items.map((item) => (
+                  {items.map((item) => section.state === 'needs_user' ? (
+                    <NeedsYouCard
+                      item={item}
+                      key={item.id}
+                      disabled={workingId === item.id}
+                      onApproval={(approval) => { void answerCase(item, { approval }); }}
+                      onCompletion={(completion) => { void answerCase(item, { completion }); }}
+                      onOpen={() => router.push(`/cases/${item.id}`)}
+                    />
+                  ) : (
                     <CaseCard
                       item={item}
                       key={item.id}

@@ -3,8 +3,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { CollapsibleSection } from '../../src/components/CollapsibleSection';
 import { ActionableResultCard } from '../../src/features/cases/ActionableResultCard';
+import { ApprovalActionCard } from '../../src/features/cases/ApprovalActionCard';
 import { ApprovalDecisionInput } from '../../src/features/cases/ApprovalDecisionInput';
+import { CaseEffortCard } from '../../src/features/cases/CaseEffortCard';
 import { CaseFeedbackCard } from '../../src/features/cases/CaseFeedbackCard';
 import { CaseStatusCard } from '../../src/features/cases/CaseStatusCard';
 import { CompletionDecisionInput } from '../../src/features/cases/CompletionDecisionInput';
@@ -182,36 +185,13 @@ export default function CaseScreen() {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>← Back</Text></Pressable>
 
-        <View style={styles.manageRow}>
-          <Pressable disabled={working} onPress={() => router.push(`/cases/${id}/edit`)} style={styles.manageButton}>
-            <Text style={styles.manageText}>Edit</Text>
-          </Pressable>
-          {item.state !== 'done' ? (
-            <Pressable disabled={working} onPress={() => void markComplete()} style={styles.manageButton}>
-              <Text style={styles.manageText}>✓ Complete</Text>
-            </Pressable>
-          ) : null}
-          <Pressable disabled={working} onPress={confirmDelete} style={styles.manageButton}>
-            <Text style={styles.deleteText}>Delete</Text>
-          </Pressable>
-        </View>
-
         <Text style={styles.saved}>Saved to Carry</Text>
         <Text style={styles.title}>{item.title}</Text>
         <Text style={styles.outcome}>{item.outcome}</Text>
 
-        <CaseStatusCard state={item.state} nextAction={item.nextAction} busy={working && item.state !== 'done'} />
+        <CaseStatusCard state={item.state} nextAction={item.nextAction} waiting={item.waiting} busy={working && item.state !== 'done'} />
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-        {evidenceItems.length > 0 ? (
-          <View style={styles.block}>
-            <Text style={styles.blockTitle}>{hasRecommendation ? 'Carry recommends' : 'What Carry found'}</Text>
-            <View style={styles.evidenceList}>
-              {evidenceItems.map((evidence) => <ActionableResultCard key={evidence.id} evidence={evidence} />)}
-            </View>
-          </View>
-        ) : null}
 
         {needsDecision ? (
           <View style={styles.block}>
@@ -224,6 +204,12 @@ export default function CaseScreen() {
                   disabled={working}
                   onSubmit={(response) => { void submitResponse(response); }}
                 />
+              ) : decisionInput.kind === 'approval' && item.approvalAction ? (
+                <ApprovalActionCard
+                  action={item.approvalAction}
+                  disabled={working}
+                  onSubmit={(approval) => { void submitResponse({ approval }); }}
+                />
               ) : decisionInput.kind === 'approval' ? (
                 <ApprovalDecisionInput
                   disabled={working}
@@ -235,6 +221,15 @@ export default function CaseScreen() {
                   onSubmit={(completion) => { void submitResponse({ completion }); }}
                 />
               ) : responseControls}
+            </View>
+          </View>
+        ) : null}
+
+        {evidenceItems.length > 0 ? (
+          <View style={styles.block}>
+            <Text style={styles.blockTitle}>{hasRecommendation ? 'Carry recommends' : 'What Carry found'}</Text>
+            <View style={styles.evidenceList}>
+              {evidenceItems.map((evidence) => <ActionableResultCard key={evidence.id} evidence={evidence} />)}
             </View>
           </View>
         ) : null}
@@ -262,8 +257,16 @@ export default function CaseScreen() {
           </View>
         ) : null}
 
-        <View style={styles.block}>
-          <Text style={styles.blockTitle}>Plan</Text>
+        {item.effort ? (
+          <View style={styles.block}>
+            <CaseEffortCard effort={item.effort} />
+          </View>
+        ) : null}
+
+        <CollapsibleSection
+          title="Plan"
+          summary={item.plan.find((step) => step.state === 'active')?.label ?? `${item.plan.length} steps`}
+        >
           <View style={styles.plan}>
             {item.plan.map((step) => (
               <View key={step.id} style={styles.planRow}>
@@ -272,10 +275,9 @@ export default function CaseScreen() {
               </View>
             ))}
           </View>
-        </View>
+        </CollapsibleSection>
 
-        <View style={styles.block}>
-          <Text style={styles.blockTitle}>Activity</Text>
+        <CollapsibleSection title="History" summary={`${item.activity.length} recorded events`}>
           <View style={styles.activity}>
             {item.activity.map((event) => (
               <View key={event.id} style={styles.activityRow}>
@@ -287,9 +289,25 @@ export default function CaseScreen() {
               </View>
             ))}
           </View>
-        </View>
+        </CollapsibleSection>
 
-        <Pressable style={styles.tellButton} onPress={() => router.push('/capture')}><Text style={styles.tellButtonText}>●  Add another case</Text></Pressable>
+        <CollapsibleSection title="Manage case" summary="Edit, complete or permanently delete">
+          <View style={styles.manageRow}>
+            <Pressable disabled={working} onPress={() => router.push(`/cases/${id}/edit`)} style={styles.manageButton}>
+              <Text style={styles.manageText}>Edit</Text>
+            </Pressable>
+            {item.state !== 'done' ? (
+              <Pressable disabled={working} onPress={() => void markComplete()} style={styles.manageButton}>
+                <Text style={styles.manageText}>✓ Complete</Text>
+              </Pressable>
+            ) : null}
+            <Pressable disabled={working} onPress={confirmDelete} style={styles.manageButton}>
+              <Text style={styles.deleteText}>Delete</Text>
+            </Pressable>
+          </View>
+        </CollapsibleSection>
+
+        <Pressable style={styles.tellButton} onPress={() => router.push('/capture')}><Text style={styles.tellButtonText}>●  Tell Carry something else</Text></Pressable>
       </ScrollView>
     </SafeAreaView>
   );

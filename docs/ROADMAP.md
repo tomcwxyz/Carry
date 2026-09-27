@@ -12,7 +12,9 @@ Gmail is the first real executor. When Carry has a verified email contact and a 
 
 Before starting broader Alpha 3 connector work, use the acceptance gate in `docs/ALPHA7_ACCEPTANCE.md` to exercise the current surfaces on a physical device, count human touches, and find unnecessary interruptions or fake agency.
 
-The remaining Alpha 2 work is therefore: prove the executor loop end-to-end, make the current on-device interactions feel good, add hand-back-only notifications, and instrument outcome/effort metrics.
+The remaining Alpha 2 work is therefore: prove the executor loop end-to-end and calibrate the delegation experience on a physical device.
+
+The **delegation experience** branch now implements the next interaction slice: inline hand-backs on Now, exact-action approval cards, quieter case detail, hand-back-only push notifications, deliberate Waiting follow-up checks, Tell Carry routing across new/existing/global commands, an inspectable You/trust centre, and event-derived effort metrics. See `docs/DELEGATION_EXPERIENCE.md`.
 
 Roadmap alpha numbers describe capability stages; GitHub/Android build numbers are build artefacts.
 
@@ -120,8 +122,9 @@ Roadmap alpha numbers describe capability stages; GitHub/Android build numbers a
 - [x] robust `waiting` behaviour for real external dependencies
 - [x] stronger outcome verification/completion semantics
 - [x] first real consequential executor behind the evidence contract
-- [ ] notifications only for genuine hand-backs
-- [ ] evaluation for interruption rate, human touches and time-to-first-useful-action
+- [x] notifications only for genuine hand-backs
+- [x] first event-derived evaluation for hand-backs, human responses, autonomous actions and time-to-first-useful-action
+- [ ] calibrate avoidable-interruption scoring across real device cases
 
 Golden paths:
 
@@ -137,6 +140,8 @@ Golden paths:
 ## Alpha 3 — connected work
 
 Do **not** rush here before the Alpha 2 on-device loop feels good. The connectors should increase what Carry can carry, not hide weaknesses in the core interaction model.
+
+Priority order after the delegation gate: **per-user Gmail → Calendar → share/camera capture → Files → GitHub**. Share and camera move forward because they are natural ways real-life work arrives on a phone, not because they require a separate product mode.
 
 ### Gmail
 

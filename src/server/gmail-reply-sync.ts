@@ -9,6 +9,7 @@ type GmailWaiting = {
   action?: string;
   externalRef?: string;
   since?: string;
+  checkAfter?: string;
 };
 
 type WaitingCase = {
@@ -74,6 +75,20 @@ export async function syncGmailReplies(limit = 20) {
     try {
       const reply = await replyFor(item.waiting);
       if (!reply) {
+        const checkAfter = item.waiting.checkAfter ? Date.parse(item.waiting.checkAfter) : NaN;
+        if (Number.isFinite(checkAfter) && Date.now() >= checkAfter) {
+          const lifecycle = await recordExecutionLifecycleEvent(item.id, item.owner_key, {
+            status: 'external_update',
+            executor: 'gmail',
+            action: 'reply follow-up check reached',
+            summary: 'No reply had arrived by the planned follow-up check.',
+            externalRef: item.waiting.externalRef,
+            metadata: { trigger: 'check_after', checkAfter: item.waiting.checkAfter },
+          });
+          if (lifecycle.shouldAdvance) await advanceCase(item.id, item.owner_key);
+          checked.push({ caseId: item.id, status: 'resumed', detail: 'follow_up_due' });
+          continue;
+        }
         checked.push({ caseId: item.id, status: 'no_reply' });
         continue;
       }

@@ -3,6 +3,7 @@ import { understandCase } from '../../src/server/case-understanding.js';
 import { formatLearningSignals, getOwnerLearningSignals } from '../../src/server/case-learning.js';
 import { getSql } from '../../src/server/db.js';
 import { getCaseEmailExecutionIntent } from '../../src/server/email-executor.js';
+import { notifyCaseNeedsUser } from '../../src/server/push-notifications.js';
 
 function normaliseSources(value: unknown) {
   if (!Array.isArray(value)) return [];
@@ -170,6 +171,41 @@ export async function GET(request: Request) {
     : null;
   const decisionInput = emailIntent ? { kind: 'approval' as const, askRadius: false } : storedDecisionInput;
   const decisionLabel = emailIntent ? `Send this email to ${emailIntent.to}?` : item.decision?.label ?? undefined;
+  const approvalAction = emailIntent ? {
+    capability: emailIntent.capability,
+    provider: emailIntent.provider,
+    label: 'Send email',
+    to: emailIntent.to,
+    subject: emailIntent.subject,
+    body: emailIntent.body,
+  } : undefined;
+
+  const firstUseful = currentEvents.find((event) => event.actor === 'carry' && (
+    event.type === 'action_completed'
+    || event.type === 'execution_completed'
+    || event.type === 'research_completed'
+  ));
+  const createdAt = new Date(item.created_at).getTime();
+  const firstUsefulAt = firstUseful ? new Date(firstUseful.created_at).getTime() : NaN;
+  const effort = {
+    humanHandbacks: currentEvents.filter((event) =>
+      event.type === 'decision_requested' || event.type === 'completion_verification_requested'
+    ).length,
+    humanResponses: currentEvents.filter((event) => event.actor === 'you' && (
+      event.type === 'decision_made'
+      || event.type === 'approval_granted'
+      || event.type === 'approval_declined'
+      || event.type === 'completion_not_confirmed'
+      || event.type === 'case_completed'
+    )).length,
+    autonomousActions: currentEvents.filter((event) =>
+      event.actor === 'carry' && (event.type === 'action_completed' || event.type === 'research_completed')
+    ).length,
+    externalActions: currentEvents.filter((event) => event.type === 'execution_completed').length,
+    timeToFirstUsefulActionMinutes: Number.isFinite(firstUsefulAt)
+      ? Math.max(0, Math.round((firstUsefulAt - createdAt) / 60000))
+      : undefined,
+  };
 
   return Response.json({
     id: item.id,
@@ -184,6 +220,8 @@ export async function GET(request: Request) {
     decisionLabel,
     decisionInput,
     waiting: normaliseWaiting(item.waiting),
+    approvalAction,
+    effort,
     plan: item.plan ?? [],
     evidence,
     feedback,
@@ -268,6 +306,7 @@ export async function PATCH(request: Request) {
           ${JSON.stringify({ inputKind: decision?.inputKind ?? 'text', askRadius: decision?.askRadius ?? false })}::jsonb
         )
       `;
+      await notifyCaseNeedsUser(id, ownerKey);
       return Response.json({ caseId: id, changed: true, reran: true, result: { kind: 'needs_user' } });
     }
 
